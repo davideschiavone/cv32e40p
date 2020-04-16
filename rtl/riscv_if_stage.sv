@@ -99,6 +99,8 @@ module riscv_if_stage
     output logic        perf_imiss_o           // Instruction Fetch Miss
 );
 
+
+  localparam HCC_PUSHPOP = 1;
   // offset FSM
   enum logic[0:0] {WAIT, IDLE } offset_fsm_cs, offset_fsm_ns;
 
@@ -340,7 +342,8 @@ module riscv_if_stage
 
   riscv_compressed_decoder
     #(
-      .FPU(FPU)
+      .FPU(FPU),
+      .HCC_PUSHPOP(HCC_PUSHPOP)
      )
   compressed_decoder_i
   (

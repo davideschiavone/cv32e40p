@@ -29,7 +29,8 @@ import riscv_defines::*;
 
 module riscv_compressed_decoder
 #(
-  parameter FPU = 0
+  parameter FPU         = 0,
+  parameter HCC_PUSHPOP = 0
 )
 (
   input  logic [31:0] instr_i,
@@ -105,6 +106,26 @@ module riscv_compressed_decoder
              else
                illegal_instr_o = 1'b1;
           end
+
+          3'b100: begin
+            // c.pop/popret/push
+             if (HCC_PUSHPOP==1) begin
+              unique case(instr_i[3:2])
+                //c.pop
+                2'b00: begin
+                  instr_o = {5'b0, instr_i[12:8], 2'b00, 5'h02, 3'b010, 1'b0, instr_i[7:4], OPCODE_POP};
+                  $display("At time %t, POP instruction",$time);
+                end
+                default: begin
+                  illegal_instr_o = 1'b1;
+                end
+              endcase
+             end
+             else
+               illegal_instr_o = 1'b1;
+          end
+
+
           default: begin
             illegal_instr_o = 1'b1;
           end

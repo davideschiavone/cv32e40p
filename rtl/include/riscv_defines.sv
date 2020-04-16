@@ -65,6 +65,12 @@ parameter OPCODE_PULP_OP    = 7'h5b;
 parameter OPCODE_VECOP      = 7'h57;
 parameter OPCODE_HWLOOP     = 7'h7b;
 
+//HCC custom
+parameter OPCODE_POP        = 7'h1B;
+parameter OPCODE_POPRET     = 7'h3B;
+parameter OPCODE_PUSH       = 7'h77;
+
+
 parameter REGC_S1   = 2'b10;
 parameter REGC_S4   = 2'b00;
 parameter REGC_RD   = 2'b01;
@@ -334,6 +340,7 @@ parameter IMMB_VU     = 4'b0111;
 parameter IMMB_SHUF   = 4'b1000;
 parameter IMMB_CLIP   = 4'b1001;
 parameter IMMB_BI     = 4'b1011;
+parameter IMMB_PUSHPOP = 4'b1010;
 
 // bit mask selection
 parameter BMASK_A_ZERO = 1'b0;

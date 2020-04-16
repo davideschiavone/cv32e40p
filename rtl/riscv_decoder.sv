@@ -156,7 +156,10 @@ module riscv_decoder
   // jump/branches
   output logic [1:0]  jump_in_dec_o,           // jump_in_id without deassert
   output logic [1:0]  jump_in_id_o,            // jump is being calculated in ALU
-  output logic [1:0]  jump_target_mux_sel_o    // jump target selection
+  output logic [1:0]  jump_target_mux_sel_o,   // jump target selection
+
+  output logic        pushpop_in_id_o
+
 );
 
   // careful when modifying the following parameters! these types have to match the ones in the APU!
@@ -308,6 +311,8 @@ module riscv_decoder
     uret_dec_o                  = 1'b0;
     dret_dec_o                  = 1'b0;
 
+    pushpop_in_id_o                 = 1'b0;
+
     unique case (instr_rdata_i[6:0])
 
       //////////////////////////////////////
@@ -430,6 +435,28 @@ module riscv_decoder
           end
         endcase
       end
+
+      OPCODE_POP: begin
+
+        pushpop_in_id_o         = 1'b1;
+        rega_used_o         = 1'b1;
+        data_type_o         = 2'b00;
+
+        // offset from immediate
+        alu_operator_o      = ALU_ADD;
+        alu_op_b_mux_sel_o  = OP_B_IMM;
+        imm_b_mux_sel_o     = IMMB_PUSHPOP;
+
+        // sign/zero extension
+        data_sign_extension_o = '0;
+
+        // load size
+        data_type_o = 2'b00; // LW
+
+      end
+
+
+
 
       OPCODE_LOAD,
       OPCODE_LOAD_POST: begin

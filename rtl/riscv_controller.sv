@@ -180,6 +180,10 @@ module riscv_controller
 
   input  logic        wb_ready_i,                 // WB stage is ready
 
+  input  logic        pushpop_in_id_i,
+  input  logic        pushpop_done_i,
+  output logic        pushpop_ctrl_o,
+
   // Performance Counters
   output logic        perf_jump_o,                // we are executing a jump instruction   (j, jr, jal, jalr)
   output logic        perf_jr_stall_o,            // stall due to jump-register-hazard
@@ -192,7 +196,7 @@ module riscv_controller
                       DECODE,
                       IRQ_TAKEN_ID, IRQ_TAKEN_IF, IRQ_FLUSH, IRQ_FLUSH_ELW, ELW_EXE,
                       FLUSH_EX, FLUSH_WB, XRET_JUMP,
-                      DBG_TAKEN_ID, DBG_TAKEN_IF, DBG_FLUSH, DBG_WAIT_BRANCH } ctrl_fsm_cs, ctrl_fsm_ns;
+                      DBG_TAKEN_ID, DBG_TAKEN_IF, DBG_FLUSH, DBG_WAIT_BRANCH, WAIT_PUSHPOP } ctrl_fsm_cs, ctrl_fsm_ns;
 
   logic jump_done, jump_done_q, jump_in_dec, branch_in_id;
   logic boot_done, boot_done_q;
@@ -299,6 +303,7 @@ module riscv_controller
     instr_valid_irq_flush_n = 1'b0;
 
     hwloop_mask_o           = 1'b0;
+    pushpop_ctrl_o          = 1'b0;
 
     unique case (ctrl_fsm_cs)
       // We were just reset, wait for fetch_enable
@@ -380,6 +385,17 @@ module riscv_controller
         end
 
       end
+
+      WAIT_PUSHPOP:
+      begin
+        halt_if_o      = 1'b1;
+        pushpop_ctrl_o = 1'b1;
+        if(pushpop_done_i) begin
+          halt_if_o     = 1'b0;
+          ctrl_fsm_ns   = DECODE;
+       end
+      end
+
 
       DECODE:
       begin
@@ -484,6 +500,14 @@ module riscv_controller
 
                   //decoding block
                   unique case (1'b1)
+
+
+                    pushpop_in_id_i: begin
+                      halt_if_o      = 1'b1;
+                      pushpop_ctrl_o = 1'b1;
+                      ctrl_fsm_ns    = id_ready_i ? WAIT_PUSHPOP : DECODE;
+                    end
+
 
                     jump_in_dec: begin
                     // handle unconditional jumps

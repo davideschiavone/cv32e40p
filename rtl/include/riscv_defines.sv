@@ -66,9 +66,7 @@ parameter OPCODE_VECOP      = 7'h57;
 parameter OPCODE_HWLOOP     = 7'h7b;
 
 //HCC custom
-parameter OPCODE_POP        = 7'h1B;
-parameter OPCODE_POPRET     = 7'h3B;
-parameter OPCODE_PUSH       = 7'h77;
+parameter OPCODE_PUSHPOP    = 7'h77;
 
 
 parameter REGC_S1   = 2'b10;
@@ -376,6 +374,7 @@ parameter BRANCH_COND = 2'b11; // conditional branches
 parameter JT_JAL  = 2'b01;
 parameter JT_JALR = 2'b10;
 parameter JT_COND = 2'b11;
+parameter POPRET  = 2'b00;
 
 // Atomic operations
 parameter AMO_LR   = 5'b00010;

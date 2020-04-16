@@ -183,6 +183,7 @@ module riscv_controller
   input  logic        pushpop_in_id_i,
   input  logic        pushpop_done_i,
   output logic        pushpop_ctrl_o,
+  input  logic        popret_jump_i,
 
   // Performance Counters
   output logic        perf_jump_o,                // we are executing a jump instruction   (j, jr, jal, jalr)
@@ -390,6 +391,10 @@ module riscv_controller
       begin
         halt_if_o      = 1'b1;
         pushpop_ctrl_o = 1'b1;
+        if(popret_jump_i) begin
+            pc_mux_o    = PC_JUMP;
+            pc_set_o    = 1'b1;
+        end
         if(pushpop_done_i) begin
           halt_if_o     = 1'b0;
           ctrl_fsm_ns   = DECODE;

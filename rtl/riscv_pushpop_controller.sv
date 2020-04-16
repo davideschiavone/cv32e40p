@@ -7,6 +7,8 @@ module riscv_pushpop_controller
 
   input  logic [3:0]  rcount_i,
   input  logic [4:0]  spimm16_i,
+  input  logic        is_push_i,
+
   input  logic        id_valid_i,
 
   output logic [31:0] immediate_o,
@@ -14,12 +16,12 @@ module riscv_pushpop_controller
   output logic        regfile_alu_we_o,
   output logic        data_req_o,
 
-  output logic        regfile_alu_waddr_mux_sel_o,
-  output logic        prepost_useincr_o,
   output logic [4:0]  reg_pushpop_o,
 
   input  logic        pushpop_ctrl_i,
-  output logic        pushpop_done_o
+  output logic        pushpop_done_o,
+  input  logic        popret_in_id_i,
+  output logic        popret_jump_o
 
 );
 
@@ -29,19 +31,21 @@ module riscv_pushpop_controller
  logic         ff_no_one;  // if no ones are found
  logic [4:0]   fl1_result; // holds the index of the last '1'
  logic  [4:0]  nplus3;
- logic  [31:0] offset;
+ logic  [31:0] offset, immediate_q;
  logic  [3:0]  mask, rcount_q, rcount_n;
 
- enum  logic [4:0] { IDLE, POPPUSH, ADD } fsm_cs, fsm_ns;
+ enum  logic [1:0] { IDLE, POPPUSH, ADD, JUMP } fsm_cs, fsm_ns;
 
  always_ff @(posedge clk or negedge rst_n) begin
    if(~rst_n) begin
-     rcount_q <= 0;
-     fsm_cs   <= IDLE;
+     rcount_q    <= 0;
+     fsm_cs      <= IDLE;
+     immediate_q <= '0;
    end else begin
     if(id_valid_i && pushpop_ctrl_i) begin
-       rcount_q <= rcount_n;
-       fsm_cs   <= fsm_ns;
+       rcount_q    <= rcount_n;
+       fsm_cs      <= fsm_ns;
+       immediate_q <= immediate_o;
     end
    end
  end
@@ -55,12 +59,13 @@ module riscv_pushpop_controller
       regfile_mem_we_o            = 1'b0;
       regfile_alu_we_o            = 1'b0;
       offset                      = spimm16_i<<2 + (3 - nplus3[1:0]);
-      prepost_useincr_o           = 1'b0;
       immediate_o                 = 32'h4;
       data_req_o                  = pushpop_ctrl_i;
-      regfile_alu_waddr_mux_sel_o = 1'b1;
       rcount_n                    = rcount_q - 1;
       pushpop_done_o              = 1'b0;
+      popret_jump_o               = 1'b0;
+      mask                        = rcount_i;
+      reg_pushpop_o               = fl1_result;
 
     unique case(fsm_cs)
 
@@ -76,8 +81,8 @@ module riscv_pushpop_controller
         */
         mask             = rcount_i;
         rcount_n         = rcount_i - 1;
-        //sp+4*(4*sp16imm + 3-((N+3) mod 4))
-        offset           = spimm16_i<<2 + (3 - nplus3[1:0]);
+        //                              sp-4*N: sp+4*(4*sp16imm + 3-((N+3) mod 4))
+        offset           = is_push_i ? $signed(-rcount_i) :  spimm16_i<<2 + (3 - nplus3[1:0]);
         immediate_o      = offset<<2;
         regfile_mem_we_o = pushpop_ctrl_i;
         fsm_ns           = rcount_n > 0 ? POPPUSH : ADD;
@@ -94,11 +99,8 @@ module riscv_pushpop_controller
 
         */
         mask                        = rcount_q;
-        immediate_o                 = 32'h4;
-        regfile_alu_waddr_mux_sel_o = 1'b0;
+        immediate_o                 = immediate_q + 4;
         regfile_mem_we_o            = 1'b1;
-        regfile_alu_we_o            = 1'b1;
-        prepost_useincr_o           = 1'b1;
         fsm_ns                      = rcount_n > 0 ? POPPUSH : ADD;
       end
 
@@ -112,25 +114,27 @@ module riscv_pushpop_controller
           loop until mask == 0
 
         */
-        mask            = rcount_q;
-        data_req_o      = 1'b0;
+        mask              = rcount_q;
+        data_req_o        = 1'b0;
         //sp+16*(((N+3)/4)+sp16imm
-        offset          = (nplus3[4:2] + spimm16_i);
+        offset            = (nplus3[4:2] + spimm16_i);
         immediate_o       = offset<<4;
         regfile_alu_we_o  = 1'b1;
-        pushpop_done_o    = 1'b1;
-        fsm_ns            = IDLE;
+        pushpop_done_o    = !popret_in_id_i;
+        fsm_ns            = popret_in_id_i ? JUMP : IDLE;
       end
 
+      JUMP:
+      begin
 
-
-
-
-
+        mask              = rcount_q;
+        data_req_o        = 1'b0;
+        pushpop_done_o    = 1'b1;
+        reg_pushpop_o     = 1;
+        popret_jump_o     = 1'b1;
+        fsm_ns            = IDLE;
+      end
     endcase // fsm_cs
-
-
-
   end
 
 
@@ -145,7 +149,7 @@ module riscv_pushpop_controller
   );
 
   assign fl1_result    = 5'd31 - ff1_result;
-  assign reg_pushpop_o = fl1_result;
+
 
  generate
    genvar k;

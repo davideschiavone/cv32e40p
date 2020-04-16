@@ -465,14 +465,12 @@ module riscv_id_stage
   logic        dret_dec;
 
   logic        pushpop_in_id, pushpop_done, pushpop_ctrl;
+  logic        popret_in_id, popret_jump;
   logic [31:0] imm_push_pop;
 
   logic        data_req_push_pop;
-  logic        regfile_mem_we_push_pop;
-  logic        regfile_alu_we_push_pop;
+  logic        regfile_mem_we_push_pop, regfile_alu_we_push_pop;
   logic [4:0]  regfile_waddr_pushpop;
-  logic        regfile_pushpop_waddr_mux_sel;
-  logic        prepost_useincr_pushpop;
 
   assign instr = instr_rdata_i;
 
@@ -513,7 +511,7 @@ module riscv_id_stage
   // source register selection regfile_fp_x=1 <=> REG_x is a FP-register
   //---------------------------------------------------------------------------
   assign regfile_addr_ra_id = {fregfile_ena & regfile_fp_a, instr[`REG_S1]};
-  assign regfile_addr_rb_id = {fregfile_ena & regfile_fp_b, instr[`REG_S2]};
+  assign regfile_addr_rb_id = pushpop_in_id && data_we_id ? {1'b0, regfile_waddr_pushpop} : {fregfile_ena & regfile_fp_b, instr[`REG_S2]};
 
   // register C mux
   always_comb begin
@@ -534,8 +532,7 @@ module riscv_id_stage
   // Second Register Write Address Selection
   // Used for prepost load/store and multiplier
 
-  assign regfile_alu_waddr_id = pushpop_in_id ? (regfile_pushpop_waddr_mux_sel   ? regfile_waddr_id : regfile_addr_ra_id)
-                                          : (regfile_alu_waddr_mux_sel       ? regfile_waddr_id : regfile_addr_ra_id);
+  assign regfile_alu_waddr_id = regfile_alu_waddr_mux_sel ? regfile_waddr_id : regfile_addr_ra_id;
 
   // Forwarding control signals
   assign reg_d_ex_is_reg_a_id  = (regfile_waddr_ex_o     == regfile_addr_ra_id) && (rega_used_dec == 1'b1) && (regfile_addr_ra_id != '0);
@@ -628,6 +625,7 @@ module riscv_id_stage
 
       // JALR: Cannot forward RS1, since the path is too long
       JT_JALR: jump_target = regfile_data_ra_id + imm_i_type;
+      POPRET:  jump_target = regfile_data_rb_id;
       default:  jump_target = regfile_data_ra_id + imm_i_type;
     endcase
   end
@@ -1166,28 +1164,30 @@ module riscv_id_stage
     .jump_in_id_o                    ( jump_in_id                ),
     .jump_target_mux_sel_o           ( jump_target_mux_sel       ),
 
-    .pushpop_in_id_o                 ( pushpop_in_id             )
+    .pushpop_in_id_o                 ( pushpop_in_id             ),
+    .popret_in_id_o                  ( popret_in_id              )
 
   );
 
-riscv_pushpop_controller riscv_pushpop_controller_i
-(
-    .clk                         ( clk                           ),
-    .rst_n                       ( rst_n                         ),
+  riscv_pushpop_controller riscv_pushpop_controller_i
+  (
+      .clk                         ( clk                           ),
+      .rst_n                       ( rst_n                         ),
 
-    .rcount_i                    ( instr[10:7]                   ),
-    .spimm16_i                   ( instr[26:22]                  ),
-    .id_valid_i                  ( id_valid_o                    ),
-    .data_req_o                  ( data_req_push_pop             ),
-    .immediate_o                 ( imm_push_pop                  ),
-    .regfile_mem_we_o            ( regfile_mem_we_push_pop       ),
-    .regfile_alu_we_o            ( regfile_alu_we_push_pop       ),
-    .reg_pushpop_o               ( regfile_waddr_pushpop         ),
-    .regfile_alu_waddr_mux_sel_o ( regfile_pushpop_waddr_mux_sel ),
-    .prepost_useincr_o           ( prepost_useincr_pushpop       ),
-    .pushpop_ctrl_i              ( pushpop_ctrl                  ),
-    .pushpop_done_o              ( pushpop_done                  )
-);
+      .rcount_i                    ( instr[10:7]                   ),
+      .spimm16_i                   ( instr[26:22]                  ),
+      .is_push_i                   ( data_we_id                    ),
+      .id_valid_i                  ( id_valid_o                    ),
+      .data_req_o                  ( data_req_push_pop             ),
+      .immediate_o                 ( imm_push_pop                  ),
+      .regfile_mem_we_o            ( regfile_mem_we_push_pop       ),
+      .regfile_alu_we_o            ( regfile_alu_we_push_pop       ),
+      .reg_pushpop_o               ( regfile_waddr_pushpop         ),
+      .pushpop_ctrl_i              ( pushpop_ctrl                  ),
+      .pushpop_done_o              ( pushpop_done                  ),
+      .popret_in_id_i              ( popret_in_id                  ),
+      .popret_jump_o               ( popret_jump                   )
+  );
 
 
   ////////////////////////////////////////////////////////////////////
@@ -1355,6 +1355,9 @@ riscv_pushpop_controller riscv_pushpop_controller_i
     .pushpop_in_id_i                ( pushpop_in_id          ),
     .pushpop_done_i                 ( pushpop_done           ),
     .pushpop_ctrl_o                 ( pushpop_ctrl           ),
+    .popret_jump_i                  ( popret_jump            ),
+
+
     // Performance Counters
     .perf_jump_o                    ( perf_jump_o            ),
     .perf_jr_stall_o                ( perf_jr_stall_o        ),
@@ -1605,12 +1608,12 @@ riscv_pushpop_controller riscv_pushpop_controller_i
           regfile_waddr_ex_o        <= regfile_mem_we_push_pop ? {1'b0, regfile_waddr_pushpop} : regfile_waddr_id;
         end
 
-        regfile_alu_we_ex_o         <= regfile_alu_we_id;
-        if (regfile_alu_we_id) begin
-          regfile_alu_waddr_ex_o    <= regfile_alu_waddr_id;
+        regfile_alu_we_ex_o         <= regfile_alu_we_id || regfile_alu_we_push_pop;
+        if (regfile_alu_we_id || regfile_alu_we_push_pop) begin
+          regfile_alu_waddr_ex_o    <= regfile_alu_we_push_pop ? 6'h02 : regfile_alu_waddr_id;
         end
 
-        prepost_useincr_ex_o        <= prepost_useincr || prepost_useincr_pushpop;
+        prepost_useincr_ex_o        <= prepost_useincr;
 
         csr_access_ex_o             <= csr_access;
         csr_op_ex_o                 <= csr_op;

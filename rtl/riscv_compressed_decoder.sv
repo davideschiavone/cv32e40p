@@ -113,9 +113,24 @@ module riscv_compressed_decoder
               unique case(instr_i[3:2])
                 //c.pop
                 2'b00: begin
-                  instr_o = {5'b0, instr_i[12:8], 2'b00, 5'h02, 3'b010, 1'b0, instr_i[7:4], OPCODE_POP};
+                  //       31 - 27  26 22         21 20  19 15   14-12   11    10-7          6 -0
+                  instr_o = {5'b0, instr_i[12:8], 2'b00, 5'h02, 3'b010, 1'b0, instr_i[7:4], OPCODE_PUSHPOP};
                   $display("At time %t, POP instruction",$time);
                 end
+                //c.popret
+                2'b01: begin
+                  //       31 - 27  26 22         21 20  19 15   14-12   11    10-7          6 -0
+                  instr_o = {5'b0, instr_i[12:8], 2'b01, 5'h02, 3'b010, 1'b0, instr_i[7:4], OPCODE_PUSHPOP};
+                  $display("At time %t, POPRET instruction",$time);
+                end
+                //c.push
+                2'b10: begin
+                  //       31 - 27  26 22         21 20  19 15   14-12   11    10-7          6 -0
+                  instr_o = {5'b0, instr_i[12:8], 2'b10, 5'h02, 3'b010, 1'b0, instr_i[7:4], OPCODE_PUSHPOP};
+                  $display("At time %t, PUSH instruction",$time);
+                end
+
+
                 default: begin
                   illegal_instr_o = 1'b1;
                 end

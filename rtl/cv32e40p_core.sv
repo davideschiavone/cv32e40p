@@ -98,38 +98,21 @@ module cv32e40p_core import cv32e40p_apu_core_pkg::*;
 );
 
   import cv32e40p_pkg::*;
+  import cv32e40p_localparam_pkg::*;
 
-  // Unused parameters and signals (left in code for future design extensions)
-  localparam PULP_SECURE         =  0;
-  localparam N_PMP_ENTRIES       = 16;
-  localparam USE_PMP             =  0;          // if PULP_SECURE is 1, you can still not use the PMP
-  localparam A_EXTENSION         =  0;
+  //these parameters will be removed once the new interface towards FPU is built
   localparam FP_DIVSQRT          =  FPU;
   localparam SHARED_FP           =  0;
   localparam SHARED_DSP_MULT     =  0;
   localparam SHARED_INT_MULT     =  0;
   localparam SHARED_INT_DIV      =  0;
   localparam SHARED_FP_DIVSQRT   =  0;
-  localparam DEBUG_TRIGGER_EN    =  1;
+  localparam APU         = ((SHARED_DSP_MULT==1) | (SHARED_INT_DIV==1) | (FPU==1)) ? 1 : 0;
 
-  // PULP bus interface behavior
-  // If enabled will allow non-stable address phase signals during waited instructions requests and
-  // will re-introduce combinatorial paths from instr_rvalid_i to instr_req_o and from from data_rvalid_i
-  // to data_req_o
-  localparam PULP_OBI            = 0;
-
-  // Unused signals related to above unused parameters
-  // Left in code (with their original _i, _o postfixes) for future design extensions;
-  // these used to be former inputs/outputs of RI5CY
 
   logic [5:0]                     data_atop_o;  // atomic operation, only active if parameter `A_EXTENSION != 0`
   logic                           irq_sec_i;
   logic                           sec_lvl_o;
-
-  localparam N_HWLP      = 2;
-  localparam N_HWLP_BITS = $clog2(N_HWLP);
-  localparam APU         = ((SHARED_DSP_MULT==1) | (SHARED_INT_DIV==1) | (FPU==1)) ? 1 : 0;
-
 
   // IF/ID signals
   logic              is_hwlp_id;
@@ -361,6 +344,11 @@ module cv32e40p_core import cv32e40p_apu_core_pkg::*;
 
   //Simchecker signal
   logic is_interrupt;
+
+
+  logic        clk;
+  logic        fetch_enable;
+
   assign is_interrupt = (pc_mux_id == PC_EXCEPTION) && (exc_pc_mux_id == EXC_PC_IRQ);
   assign m_exc_vec_pc_mux_id = (mtvec_mode == 2'b0) ? 5'h0 : exc_cause;
   assign u_exc_vec_pc_mux_id = (utvec_mode == 2'b0) ? 5'h0 : exc_cause;
@@ -391,8 +379,6 @@ module cv32e40p_core import cv32e40p_apu_core_pkg::*;
   //                                                     |___/                                //
   //////////////////////////////////////////////////////////////////////////////////////////////
 
-  logic        clk;
-  logic        fetch_enable;
 
   cv32e40p_sleep_unit
   #(

@@ -1134,7 +1134,7 @@ module cv32e40p_core import cv32e40p_apu_core_pkg::*;
   // Assume that IRQ indices which are reserved by the RISC-V privileged spec
   // or are meant for User or Hypervisor mode are not used (i.e. tied to 0)
   property p_no_reserved_irq;
-     @(posedge clk_i) disable iff (!rst_ni) (1'b1) |-> ((irq_i & ~IRQ_MASK) == 'b0);
+     @(posedge clk_i) disable iff (!rst_ni) (1'b1) |-> ((irq_i & ~cv32e40p_localparam_pkg::IRQ_MASK) == 'b0);
   endproperty
 
   a_no_reserved_irq : assume property(p_no_reserved_irq);

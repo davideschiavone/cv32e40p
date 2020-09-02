@@ -35,6 +35,9 @@ package cv32e40p_localparam_pkg;
   // to data_req_o
   localparam PULP_OBI            = 0;
 
+  // Interrupt mask
+  localparam IRQ_MASK            = 32'hFFFF0888;
+
   // Unused signals related to above unused parameters
   // Left in code (with their original _i, _o postfixes) for future design extensions;
   // these used to be former inputs/outputs of RI5CY

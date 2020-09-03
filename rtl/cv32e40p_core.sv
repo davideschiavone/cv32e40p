@@ -116,7 +116,7 @@ module cv32e40p_core import cv32e40p_apu_core_pkg::*;
   // If enabled will allow non-stable address phase signals during waited instructions requests and
   // will re-introduce combinatorial paths from instr_rvalid_i to instr_req_o and from from data_rvalid_i
   // to data_req_o
-  localparam PULP_OBI            = 0;
+  localparam PULP_OBI            = 1;
 
   // Unused signals related to above unused parameters
   // Left in code (with their original _i, _o postfixes) for future design extensions;

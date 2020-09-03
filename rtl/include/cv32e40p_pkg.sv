@@ -260,7 +260,7 @@ typedef enum logic[11:0] {
   CSR_MTVEC          = 12'h305,
 
   // Performance counters
-  CSR_MCOUNTEREN     = 12'h306,  
+  CSR_MCOUNTEREN     = 12'h306,
   CSR_MCOUNTINHIBIT  = 12'h320,
   CSR_MHPMEVENT3     = 12'h323,
   CSR_MHPMEVENT4     = 12'h324,
@@ -643,7 +643,7 @@ parameter EXC_CAUSE_ECALL_UMODE  = 5'h08;
 parameter EXC_CAUSE_ECALL_MMODE  = 5'h0B;
 
 // Interrupt mask
-parameter IRQ_MASK = 32'hFFFF0888;
+parameter IRQ_MASK = 32'hFFFFFFFF;
 
 // Trap mux selector
 parameter TRAP_MACHINE      = 2'b00;

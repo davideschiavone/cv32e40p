@@ -2357,7 +2357,7 @@ module cv32e40p_decoder import cv32e40p_pkg::*; import cv32e40p_apu_core_pkg::*;
               CSR_FCSR :
                 if(!FPU) csr_illegal = 1'b1;
 
-            //  Writes to read only CSRs results in illegal instruction
+            // Writes to read only CSRs results in illegal instruction
             CSR_MVENDORID,
               CSR_MARCHID,
               CSR_MIMPID,
@@ -2471,14 +2471,18 @@ module cv32e40p_decoder import cv32e40p_pkg::*; import cv32e40p_apu_core_pkg::*;
                 if(DEBUG_TRIGGER_EN != 1)
                   csr_illegal = 1'b1;
 
-            // Hardware Loop register, UHARTID access
+            // Hardware Loop register,
             CSR_LPSTART0,
               CSR_LPEND0,
               CSR_LPCOUNT0,
               CSR_LPSTART1,
               CSR_LPEND1,
-              CSR_LPCOUNT1,
-              CSR_UHARTID :
+              CSR_LPCOUNT1 :
+                 // Writes to read only CSRs results in illegal instruction
+                if(csr_op != CSR_OP_READ || !PULP_XPULP) csr_illegal = 1'b1;
+
+            // UHARTID access
+            CSR_UHARTID :
                 if(!PULP_XPULP) csr_illegal = 1'b1;
 
             // PRIVLV access

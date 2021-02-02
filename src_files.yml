@@ -82,19 +82,6 @@ cv32e40p_vip_rtl:
     skip_synthesis,
   ]
 
-cv32e40p_regfile_rtl:
-  targets: [
-    rtl,
-    tsmc55,
-    gf22,
-  ]
-  incdirs: [
-    ./rtl/include,
-  ]
-  files: [
-    ./rtl/cv32e40p_register_file_latch.sv,
-  ]
-
 cv32e40p_regfile_verilator:
   targets: [
     verilator,

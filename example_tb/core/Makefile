@@ -30,7 +30,7 @@ VLIB			= vlib-$(VVERSION)
 VWORK			= work
 
 VLOG			= vlog-$(VVERSION)
-VLOG_FLAGS		= -pedanticerrors -suppress 2577 -suppress 2583 -define CV32E40P_TRACE_EXECUTION
+VLOG_FLAGS		= -pedanticerrors -suppress 2577 -suppress 2583 -define CV32E40P_TRACE_EXECUTION -define CV32E40P_RVFI_ON
 VLOG_LOG                = vloggy
 
 VOPT			= vopt-$(VVERSION)

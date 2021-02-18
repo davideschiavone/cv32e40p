@@ -92,7 +92,10 @@ module cv32e40p_wrapper import cv32e40p_apu_core_pkg::*;
   // CPU Control Signals
   input  logic        fetch_enable_i,
   output logic        core_sleep_o
+
 );
+
+    import cv32e40p_pkg::*;
 
 `ifdef CV32E40P_ASSERT_ON
 
@@ -198,6 +201,66 @@ module cv32e40p_wrapper import cv32e40p_apu_core_pkg::*;
       .imm_clip_type  ( core_i.id_stage_i.instr[11:7]       )
     );
 `endif
+
+`ifdef CV32E40P_RVFI_ON
+  cv32e40p_rvfi
+  rvfi_i
+  (
+    .clk_i                    ( core_i.clk_i                                   ),
+    .rst_ni                   ( core_i.rst_ni                                  ),
+
+    .hart_id_i                ( core_i.hart_id_i                               ),
+    .irq_ack_i                ( core_i.id_stage_i.controller_i.irq_ack_o       ),
+
+    .illegal_insn_id_i        ( core_i.id_stage_i.controller_i.illegal_insn_n  ),
+    .instr_is_compressed_id_i ( core_i.if_stage_i.is_compressed_id_o           ),
+    .instr_rdata_c_id_i       ( core_i.if_stage_i.instr_rdata_c_id             ),
+    .instr_rdata_id_i         ( core_i.if_stage_i.instr_rdata_id_o             ),
+    .instr_id_valid_i         ( core_i.id_stage_i.id_valid_o                   ),
+    .instr_id_is_decoding_i   ( core_i.id_stage_i.is_decoding_o                ),
+
+    .rdata_a_id_i             ( core_i.id_stage_i.operand_a_fw_id              ),
+    .raddr_a_id_i             ( core_i.id_stage_i.register_file_i.raddr_a_i    ),
+    .rdata_b_id_i             ( core_i.id_stage_i.operand_b_fw_id              ),
+    .raddr_b_id_i             ( core_i.id_stage_i.register_file_i.raddr_b_i    ),
+    .rdata_c_id_i             ( core_i.id_stage_i.operand_c_fw_id              ),
+    .raddr_c_id_i             ( core_i.id_stage_i.register_file_i.raddr_c_i    ),
+
+    .rd1_we_id_i              ( core_i.id_stage_i.regfile_alu_we_id            ),
+    .rd1_addr_id_i            ( core_i.id_stage_i.regfile_alu_waddr_id         ),
+    .rd2_we_id_i              ( core_i.id_stage_i.regfile_we_id                ),
+    .rd2_addr_id_i            ( core_i.id_stage_i.regfile_waddr_id             ),
+
+    .pc_id_i                  ( core_i.id_stage_i.pc_id_i                      ),
+    .pc_if_i                  ( core_i.if_stage_i.pc_if_o                      ),
+    .jump_target_id_i         ( core_i.if_stage_i.jump_target_id_i             ),
+
+    .pc_set_i                 ( core_i.if_stage_i.pc_set_i                     ),
+    .is_jump_id_i             ( core_i.if_stage_i.pc_mux_i == PC_JUMP          ),
+
+    .lsu_type_id_i            ( core_i.id_stage_i.data_type_id                 ),
+    .lsu_we_id_i              ( core_i.id_stage_i.data_we_id                   ),
+    .lsu_req_id_i             ( core_i.id_stage_i.data_req_id                  ),
+
+    .instr_ex_ready_i         ( core_i.ex_stage_i.ex_ready_o                   ),
+    .instr_ex_valid_i         ( core_i.ex_stage_i.ex_valid_o                   ),
+
+    .branch_target_ex_i       ( core_i.if_stage_i.jump_target_ex_i             ),
+    .is_branch_ex_i           ( core_i.if_stage_i.pc_mux_i == PC_BRANCH        ),
+
+    .rd1_wdata_ex_i           ( core_i.id_stage_i.register_file_i.wdata_b_i    ),
+
+    .lsu_addr_ex_i            ( core_i.load_store_unit_i.data_addr_int         ),
+    .lsu_wdata_ex_i           ( core_i.load_store_unit_i.data_wdata_ex_i       ),
+    .lsu_req_ex_i             ( core_i.load_store_unit_i.data_req_o            ),
+    .lsu_misagligned_ex_i     ( core_i.load_store_unit_i.data_misaligned_o     ),
+
+    .instr_wb_ready_i         ( core_i.ex_stage_i.wb_ready_i                   ),
+    .rd2_wdata_wb_i           ( core_i.id_stage_i.register_file_i.wdata_a_i    )
+
+  );
+`endif
+
 
     // instantiate the core
     cv32e40p_core

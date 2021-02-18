@@ -127,6 +127,11 @@ module cv32e40p_if_stage
   logic [31:0]       instr_decompressed;
   logic              instr_compressed_int;
 
+  // used only by the RVFI interface.
+  // Thus, this register does not drive any RTL logic,
+  // and should be removed by the synthesizer
+  logic [15:0]       instr_rdata_c_id;
+
 
   // exception PC selection mux
   always_comb
@@ -240,6 +245,7 @@ module cv32e40p_if_stage
     begin
       instr_valid_id_o      <= 1'b0;
       instr_rdata_id_o      <= '0;
+      instr_rdata_c_id      <= '0;
       is_fetch_failed_o     <= 1'b0;
       pc_id_o               <= '0;
       is_compressed_id_o    <= 1'b0;
@@ -252,6 +258,7 @@ module cv32e40p_if_stage
       begin
         instr_valid_id_o    <= 1'b1;
         instr_rdata_id_o    <= instr_decompressed;
+        instr_rdata_c_id    <= instr_aligned[15:0];
         is_compressed_id_o  <= instr_compressed_int;
         illegal_c_insn_id_o <= illegal_c_insn;
         is_fetch_failed_o   <= 1'b0;

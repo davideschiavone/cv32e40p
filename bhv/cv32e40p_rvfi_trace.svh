@@ -1,0 +1,55 @@
+// Copyright (c) 2020 OpenHW Group
+//
+// Licensed under the Solderpad Hardware Licence, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://solderpad.org/licenses/
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0 WITH SHL-2.0
+
+// Includes to print info about the RVFI output
+// Contributor: Davide Schiavone <davide@openhwgroup.org>
+
+  integer      f;
+  string       fn;
+  string insn_str;
+
+  initial begin
+
+    wait(rst_ni == 1'b1);
+    $sformat(fn, "trace_rvfi_%h.log", hart_id_i);
+    f = $fopen(fn, "w");
+    $fwrite(f, "order\tinsn\trs1_addr\trs1_rdata\trs2_addr\trs2_rdata\trd1_addr\trd1_wdata\t\tpc_rdat\tmem_addr\tmem_rdata\tmem_wdata\n");
+
+    while(1) begin
+
+      @(posedge clk_i)
+
+      if(rvfi_valid) begin
+
+        insn_str = $sformatf(
+                        "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h\n",
+                        rvfi_order[15:0],
+                        rvfi_insn,
+                        rvfi_rs1_addr,
+                        rvfi_rs1_rdata,
+                        rvfi_rs2_addr,
+                        rvfi_rs2_rdata,
+                        rvfi_rd1_addr,
+                        rvfi_rd1_wdata,
+                        rvfi_pc_rdata,
+                        rvfi_mem_addr,
+                        rvfi_mem_rdata,
+                        rvfi_mem_wdata );
+        $fwrite(f, "%s\n", insn_str);
+      end
+    end
+
+  end

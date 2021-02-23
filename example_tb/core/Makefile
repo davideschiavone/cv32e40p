@@ -60,10 +60,10 @@ RTLSRC			:= $(filter-out $(RTLSRC_HOME)/rtl/cv32e40p_register_file_latch.sv,\
 				$(wildcard $(RTLSRC_HOME)/rtl/*.sv))
 RTLSRC_FPNEW_TB		:= $(wildcard *.sv)
 RTLSRC_FPNEW_INCDIR	:= $(RTLSRC_HOME)/rtl/fpnew/src/common_cells/include
-RTLSRC_FPNEW_PKG	:= $(RTLSRC_HOME)/rtl/fpnew/src/fpu_div_sqrt_mvp/hdl/defs_div_sqrt_mvp.sv $(RTLSRC_HOME)/rtl/fpnew/src/fpnew_pkg.sv
+RTLSRC_FPNEW_PKG	:= $(RTLSRC_HOME)/rtl/fpnew/src/fpu_div_sqrt_mvp/hdl/defs_div_sqrt_mvp.sv $(RTLSRC_HOME)/rtl/fpnew/src/fpnew_pkg.sv $(RTLSRC_HOME)/rtl/fpnew/src/common_cells/src/cf_math_pkg.sv
 RTLSRC_FPNEW		:= $(filter-out $(RTLSRC_HOME)/rtl/fpnew/src/fpnew_pkg.sv, $(wildcard $(RTLSRC_HOME)/rtl/fpnew/src/*.sv)) \
 				$(filter-out $(RTLSRC_HOME)/rtl/fpnew/src/fpu_div_sqrt_mvp/hdl/defs_div_sqrt_mvp.sv, $(wildcard $(RTLSRC_HOME)/rtl/fpnew/src/fpu_div_sqrt_mvp/hdl/*.sv)) \
-				$(wildcard $(RTLSRC_HOME)/rtl/fpnew/src/common_cells/src/*.sv) $(wildcard $(RTLSRC_HOME)/rtl/fpnew/src/common_cells/src/deprecated/*.sv)
+				 $(RTLSRC_HOME)/rtl/fpnew/src//common_cells/src/rr_arb_tree.sv  $(RTLSRC_HOME)/rtl/fpnew/src/common_cells/src/lzc.sv
 
 RTLSRC_VLOG_TB_TOP	:= $(basename $(notdir $(RTLSRC_TB_TOP)))
 RTLSRC_VOPT_TB_TOP	:= $(addsuffix _vopt, $(RTLSRC_VLOG_TB_TOP))
@@ -120,6 +120,14 @@ vsim-all-fp: check_fpnew_deps .opt-rtl-fp
 	$(RTLSRC_VOPT_TB_TOP)
 	touch .opt-rtl-fp
 
+vsim-all-pulp: .opt-rtl-pulp
+
+.opt-rtl-pulp: .build-rtl
+	$(VOPT) -work $(VWORK) $(VOPT_FLAGS) -g PULP_XPULP=1 $(RTLSRC_VLOG_TB_TOP) -o \
+	$(RTLSRC_VOPT_TB_TOP)
+	touch .opt-rtl-pulp
+
+
 # run tb and exit
 .PHONY: vsim-run
 vsim-run: ALL_VSIM_FLAGS += -c
@@ -168,10 +176,25 @@ vsim-run-gui-fp: vsim-all-fp
 	$(VSIM) -work $(VWORK) $(ALL_VSIM_FLAGS) -GFPU=1 \
 	$(RTLSRC_VOPT_TB_TOP) -do $(VSIM_SCRIPT)
 
+# run tb and exit
+.PHONY: vsim-run-pulp
+vsim-run-pulp: ALL_VSIM_FLAGS += -c
+vsim-run-pulp: vsim-all-pulp
+	$(VSIM) -work $(VWORK) $(ALL_VSIM_FLAGS) -GPULP_XPULP=1 \
+	$(RTLSRC_VOPT_TB_TOP) -do 'source $(VSIM_SCRIPT); exit -f'
+
+
+# run tb with simulator gui
+.PHONY: vsim-run-gui-pulp
+vsim-run-gui-pulp: ALL_VSIM_FLAGS += $(VSIM_GUI_FLAGS)
+vsim-run-gui-pulp: vsim-all-pulp
+	$(VSIM) -work $(VWORK) $(ALL_VSIM_FLAGS) -GPULP_XPULP=1 \
+	$(RTLSRC_VOPT_TB_TOP) -do $(VSIM_SCRIPT)
+
 .PHONY: tb-clean-fp
 tb-clean-fp:
 	if [ -d $(VWORK) ]; then rm -r $(VWORK); fi
-	rm -rf transcript vsim.wlf vsim.dbg trace_core*.log ../../rtl/fpnew \
+	rm -rf transcript vsim.wlf vsim.dbg trace_core*.log \
 	.build-rtl-fp .opt-rtl-fp .lib-rtl-fp *.vcd objdump
 
 # rules to generate hex (loadable by simulators) from elf
@@ -283,14 +306,14 @@ hwlp-clean:
 	rm -rf hwlp_test/hwlp_test.elf hwlp_test/hwlp_test.hex
 
 .PHONY: hwlp-vsim-run
-hwlp-vsim-run: vsim-all hwlp_test/hwlp_test.hex
+hwlp-vsim-run: vsim-all-pulp hwlp_test/hwlp_test.hex
 hwlp-vsim-run: ALL_VSIM_FLAGS += "+firmware=hwlp_test/hwlp_test.hex"
-hwlp-vsim-run: vsim-run
+hwlp-vsim-run: vsim-run-pulp
 
 .PHONY: hwlp-vsim-run-gui
-hwlp-vsim-run-gui: vsim-all hwlp_test/hwlp_test.hex
+hwlp-vsim-run-gui: vsim-all-pulp hwlp_test/hwlp_test.hex
 hwlp-vsim-run-gui: ALL_VSIM_FLAGS += "+firmware=hwlp_test/hwlp_test.hex"
-hwlp-vsim-run-gui: vsim-run-gui
+hwlp-vsim-run-gui: vsim-run-gui-pulp
 
 # general targets
 .PHONY: clean

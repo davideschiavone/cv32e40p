@@ -35,7 +35,7 @@
       if(rvfi_valid) begin
 
         insn_str = $sformatf(
-                        "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h\n",
+                        "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h",
                         rvfi_order[15:0],
                         rvfi_insn,
                         rvfi_rs1_addr,

@@ -44,6 +44,13 @@ VSIM_DEBUG_FLAGS	= -debugdb
 VSIM_GUI_FLAGS          = -gui -debugdb
 VSIM_SCRIPT             = vsim.tcl
 
+# xrun is the Cadence xcelium SystemVerilog simulator (https://cadence.com/)
+XRUN                    = xrun
+XRUN_RUN_FLAGS          = -top $(RTLSRC_XRUN_TB_TOP) -timescale 1ns/1ps
+XRUN_COMP_FLAGS         = -clean -smartorder -sv $(XRUN_RUN_FLAGS) +define+CV32E40P_APU_TRACE -uvmhome CDNS-1.2-ML
+
+XRUN_DIR                = xcelium.d
+
 # RTL source files
 RTLSRC_HOME             := ../..
 export DESIGN_RTL_DIR = $(RTLSRC_HOME)/rtl
@@ -69,6 +76,7 @@ RTLSRC_FPNEW		:= $(filter-out $(RTLSRC_HOME)/rtl/fpnew/src/fpnew_pkg.sv, $(wildc
 
 RTLSRC_VLOG_TB_TOP	:= $(basename $(notdir $(RTLSRC_TB_TOP)))
 RTLSRC_VOPT_TB_TOP	:= $(addsuffix _vopt, $(RTLSRC_VLOG_TB_TOP))
+RTLSRC_XRUN_TB_TOP	:= $(addprefix worklib., $(RTLSRC_VLOG_TB_TOP))
 
 # riscv toolchain install path
 RISCV                    ?= ~/.riscv
@@ -206,6 +214,14 @@ tb-clean-fp:
 %.dis: %.elf
 	$(RISCV_EXE_PREFIX)objdump -S $^
 
+# run with xrun
+.PHONY: xrun-all
+xrun-all: $(CV_CORE_MANIFEST) $(RTLSRC_BHV) $(RTLSRC_TB_PKG) $(RTLSRC_TB)
+	$(XRUN) \
+		$(XRUN_COMP_FLAGS) \
+		-f $(CV_CORE_MANIFEST) \
+		$(RTLSRC_BHV) $(RTLSRC_TB_PKG) $(RTLSRC_TB)
+
 
 # Running custom programs:
 # This is an example for running a Hello World in the testbench
@@ -234,6 +250,16 @@ custom-vsim-run: vsim-run
 custom-vsim-run-gui: vsim-all custom/hello_world.hex
 custom-vsim-run-gui: ALL_VSIM_FLAGS += "+firmware=custom/hello_world.hex"
 custom-vsim-run-gui: vsim-run-gui
+
+.PHONY: custom-xrun-run
+custom-xrun-run: xrun-all custom/hello_world.hex
+	$(XRUN) \
+		$(XRUN_RUN_FLAGS) +firmware=custom/hello_world.hex
+
+.PHONY: custom-xrun-run-gui
+custom-xrun-run-gui: xrun-all custom/hello_world.hex
+	$(XRUN) -gui \
+		$(XRUN_RUN_FLAGS) +firmware=custom/hello_world.hex
 
 # Running custom fp programs:
 # This is an example for running a floating-point matrix multiplication in the testbench

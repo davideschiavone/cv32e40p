@@ -47,7 +47,7 @@ VSIM_SCRIPT             = vsim.tcl
 # xrun is the Cadence xcelium SystemVerilog simulator (https://cadence.com/)
 XRUN                    = xrun
 XRUN_RUN_FLAGS          = -top $(RTLSRC_XRUN_TB_TOP) -timescale 1ns/1ps
-XRUN_COMP_FLAGS         = -clean -smartorder -sv $(XRUN_RUN_FLAGS) +define+CV32E40P_APU_TRACE -uvmhome CDNS-1.2-ML
+XRUN_COMP_FLAGS         = -clean -smartorder -sv $(XRUN_RUN_FLAGS) -linedebug -access rwc +define+CV32E40P_APU_TRACE -uvmhome CDNS-1.2-ML
 
 XRUN_DIR                = xcelium.d
 
@@ -214,13 +214,25 @@ tb-clean-fp:
 %.dis: %.elf
 	$(RISCV_EXE_PREFIX)objdump -S $^
 
-# run with xrun
-.PHONY: xrun-all
-xrun-all: $(CV_CORE_MANIFEST) $(RTLSRC_BHV) $(RTLSRC_TB_PKG) $(RTLSRC_TB)
+# compile with xrun
+.xrun-rtl: $(CV_CORE_MANIFEST) $(RTLSRC_BHV) $(RTLSRC_TB_PKG) $(RTLSRC_TB)
 	$(XRUN) \
 		$(XRUN_COMP_FLAGS) \
 		-f $(CV_CORE_MANIFEST) \
 		$(RTLSRC_BHV) $(RTLSRC_TB_PKG) $(RTLSRC_TB)
+		touch .xrun-rtl
+
+xrun-all: .xrun-rtl
+
+
+xrun-all-fp: check_fpnew_deps .xrun-rtl-fp
+
+.xrun-rtl-fp: $(RTLSRC_FPNEW_PKG) $(RTLSRC_FPNEW) $(CV_CORE_MANIFEST) $(RTLSRC_BHV) $(RTLSRC_TB_PKG) $(RTLSRC_FPNEW_TB)
+	$(XRUN) \
+		$(XRUN_COMP_FLAGS) +incdir+$(RTLSRC_FPNEW_INCDIR) \
+		$(RTLSRC_FPNEW_PKG) $(RTLSRC_FPNEW) -f $(CV_CORE_MANIFEST) \
+		$(RTLSRC_BHV) $(RTLSRC_TB_PKG) $(RTLSRC_FPNEW_TB)
+		touch .xrun-rtl-fp
 
 
 # Running custom programs:
@@ -289,6 +301,16 @@ custom-fp-vsim-run-gui: vsim-all-fp custom_fp/main.hex
 custom-fp-vsim-run-gui: ALL_VSIM_FLAGS += "+firmware=custom_fp/main.hex"
 custom-fp-vsim-run-gui: vsim-run-gui-fp
 
+.PHONY: custom-fp-xrun-run
+custom-fp-xrun-run: xrun-all-fp custom_fp/main.hex
+	$(XRUN) \
+		$(XRUN_RUN_FLAGS) -defparam tb_top.FPU=1 +firmware=custom_fp/main.hex
+
+.PHONY: custom-fp-xrun-run-gui
+custom-fp-xrun-run-gui: xrun-all-fp custom_fp/main.hex
+	$(XRUN) -gui \
+		$(XRUN_RUN_FLAGS) -defparam tb_top.FPU=1 +firmware=custom_fp/main.hex
+
 # compile and run interrupt
 interrupt/interrupt.elf: interrupt/interrupt.c
 	$(RISCV_EXE_PREFIX)gcc -march=rv32imc -o $@ -w -Os -g -nostdlib \
@@ -314,6 +336,16 @@ interrupt-vsim-run: vsim-run
 interrupt-vsim-run-gui: vsim-all interrupt/interrupt.hex
 interrupt-vsim-run-gui: ALL_VSIM_FLAGS += "+firmware=interrupt/interrupt.hex"
 interrupt-vsim-run-gui: vsim-run-gui
+
+.PHONY: interrupt-xrun-run
+interrupt-xrun-run: xrun-all interrupt/interrupt.hex
+	$(XRUN) \
+		$(XRUN_RUN_FLAGS) +firmware=interrupt/interrupt.hex
+
+.PHONY: interrupt-xrun-run-gui
+interrupt-xrun-run-gui: xrun-all interrupt/interrupt.hex
+	$(XRUN) -gui \
+		$(XRUN_RUN_FLAGS) +firmware=interrupt/interrupt.hex
 
 # Compile and run HW-loops test
 # Until the compiler will correctly handle HW-loops, manually insert them (no jumps/branch in the body)
@@ -342,6 +374,18 @@ hwlp-vsim-run: vsim-run-pulp
 hwlp-vsim-run-gui: vsim-all-pulp hwlp_test/hwlp_test.hex
 hwlp-vsim-run-gui: ALL_VSIM_FLAGS += "+firmware=hwlp_test/hwlp_test.hex"
 hwlp-vsim-run-gui: vsim-run-gui-pulp
+
+
+.PHONY: hwlp-xrun-run
+hwlp-xrun-run: xrun-all hwlp_test/hwlp_test.hex
+	$(XRUN) \
+		$(XRUN_RUN_FLAGS) -defparam tb_top.PULP_XPULP=1 +firmware=hwlp_test/hwlp_test.hex
+
+.PHONY: hwlp-xrun-run-gui
+hwlp-xrun-run-gui: xrun-all hwlp_test/hwlp_test.hex
+	$(XRUN) -gui \
+		$(XRUN_RUN_FLAGS) -defparam tb_top.PULP_XPULP=1 +firmware=hwlp_test/hwlp_test.hex
+
 
 # general targets
 .PHONY: clean

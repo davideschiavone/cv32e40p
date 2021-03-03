@@ -168,6 +168,9 @@ module cv32e40p_rvfi (
   logic        instr_ex_done;
   logic        instr_wb_done;
 
+  logic        ex_stage_valid_q;
+  logic        wb_stage_valid_q;
+
   `include "cv32e40p_rvfi_trace.svh"
 
   assign rvfi_valid     = rvfi_stage_valid    [RVFI_STAGES-1];
@@ -205,7 +208,28 @@ module cv32e40p_rvfi (
 
   assign instr_ex_done  = instr_ex_ready_i;
 
-  assign instr_wb_done  = data_req_q[1] ? instr_ex_valid_i : instr_wb_ready_i;
+  assign instr_wb_done  = instr_wb_ready_i;
+
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni) begin
+        ex_stage_valid_q  <= '0;
+        wb_stage_valid_q  <= '0;
+      end else begin
+        /*
+            if instr_id_done is 1, it is implied that the EX stage is ready to accept a new instruction, thus ex_stage_valid_q <= 1
+            if not, if instr_ex_done is 1 (i.e. ex_ready_i), we clean up the ex_stage_valid_q (if not id_done which has higher priority)
+                    otherwise, if instr_ex_done is 0, we keep the old value to say that the instruction is valid but not complete or not valid
+        */
+        ex_stage_valid_q  <= instr_id_done ? 1'b1 : ( instr_ex_done == 1'b0 ? ex_stage_valid_q : 1'b0);
+        /*
+            if instr_ex_done and ex_stage_valid_q is 1, it means that the valid instruction in EX has completed, thus wb_stage_valid_q <= 1
+            if not (not completed or not valid) , if instr_wb_done is 0 (i.e. data_rvalid_i==0), we are waiting for the valid so the wb_stage holds
+                    otherwise, if instr_wb_done is 1, we can clean it
+        */
+        wb_stage_valid_q  <= ( instr_ex_done & ex_stage_valid_q ) ? 1'b1 : ( instr_wb_done == 1'b0 ? wb_stage_valid_q : 1'b0);
+      end
+    end
 
 
   for (genvar i = 0;i < RVFI_STAGES; i = i + 1) begin : g_rvfi_stages
@@ -271,10 +295,9 @@ module cv32e40p_rvfi (
         end else if (i == 1) begin
           // Signals valid in EX stage
 
-          rvfi_stage_valid[i]       <= rvfi_stage_valid[i-1] & instr_ex_done;
-
           if(instr_ex_done) begin
 
+            rvfi_stage_valid[i]     <= ex_stage_valid_q;
             rvfi_stage_halt[i]      <= rvfi_stage_halt[i-1];
             rvfi_stage_trap[i]      <= rvfi_stage_trap[i-1];
             rvfi_stage_intr[i]      <= rvfi_stage_intr[i-1];
@@ -308,12 +331,11 @@ module cv32e40p_rvfi (
         end else if (i == 2) begin
           // Signals valid in WB stage
 
-
-          rvfi_stage_valid[i]       <= rvfi_stage_valid[i-1] & instr_wb_done;
+          rvfi_stage_valid[i]      <= instr_wb_done & wb_stage_valid_q;
 
           if(instr_wb_done) begin //ex_valid_o
 
-            rvfi_stage_valid[i]     <= rvfi_stage_valid[i-1];
+
             rvfi_stage_halt[i]      <= rvfi_stage_halt[i-1];
             rvfi_stage_trap[i]      <= rvfi_stage_trap[i-1];
             rvfi_stage_intr[i]      <= rvfi_stage_intr[i-1];

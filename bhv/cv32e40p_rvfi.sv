@@ -296,6 +296,7 @@ module cv32e40p_rvfi (
           // Signals valid in EX stage
 
           if(instr_ex_done) begin
+            //true during first data req if GNT
 
             rvfi_stage_valid[i]     <= ex_stage_valid_q;
             rvfi_stage_halt[i]      <= rvfi_stage_halt[i-1];
@@ -327,15 +328,13 @@ module cv32e40p_rvfi (
             data_req_q[i]           <= lsu_req_ex_i;
 
           end
-
         end else if (i == 2) begin
           // Signals valid in WB stage
 
-          rvfi_stage_valid[i]      <= instr_wb_done & wb_stage_valid_q;
+          if(instr_ex_done) begin //ex_valid_o
+            //true during second data req if GNT & VALID
 
-          if(instr_wb_done) begin //ex_valid_o
-
-
+            rvfi_stage_valid[i]     <= rvfi_stage_valid[i-1];
             rvfi_stage_halt[i]      <= rvfi_stage_halt[i-1];
             rvfi_stage_trap[i]      <= rvfi_stage_trap[i-1];
             rvfi_stage_intr[i]      <= rvfi_stage_intr[i-1];
@@ -352,21 +351,24 @@ module cv32e40p_rvfi (
             rvfi_stage_rd2_addr[i]  <= rvfi_stage_rd2_addr[i-1];
             rvfi_stage_rd1_wdata[i] <= rvfi_stage_rd1_wdata[i-1];
             // If writing to x0 zero write data as required by RVFI specification
-            rvfi_stage_rd2_wdata[i] <= rvfi_stage_rd2_addr[i-1] == '0 ? '0 : rvfi_rd2_wdata_d;
+            rvfi_stage_rd2_wdata[i] <= rvfi_stage_rd2_wdata[i-1];
 
             rvfi_stage_pc_rdata[i]  <= rvfi_stage_pc_rdata[i-1];
             rvfi_stage_pc_wdata[i]  <= rvfi_stage_pc_wdata[i-1];
 
             rvfi_stage_mem_rmask[i] <= rvfi_stage_mem_rmask[i-1];
             rvfi_stage_mem_wmask[i] <= rvfi_stage_mem_wmask[i-1];
-            rvfi_stage_mem_addr[i]  <= data_misagligned_q[i-1] ? rvfi_stage_mem_addr[i] : rvfi_stage_mem_addr[i-1];
+            rvfi_stage_mem_addr[i]  <= rvfi_stage_mem_addr[i-1];
             rvfi_stage_mem_wdata[i] <= rvfi_stage_mem_wdata[i-1];
             rvfi_stage_mem_rdata[i] <= rvfi_rd2_wdata_d;
 
-            //rvfi_stage_valid[i]     <= data_misagligned_q[i-1] ? 1'b0 : 1'b1;
 
           end //instr_wb_done
+          else             rvfi_stage_valid[i]     <= 1'b0;
+
         end //i == 2
+
+
       end
     end
   end
@@ -430,7 +432,7 @@ module cv32e40p_rvfi (
   end
 
   //result from WB stage/read value from Dmem
-  assign rvfi_rd2_wdata_d = rd2_wdata_wb_i;
+  assign rvfi_rd2_wdata_d = rd2_wdata_wb_i === 'x ? '0 : rd2_wdata_wb_i;
 
 
 endmodule

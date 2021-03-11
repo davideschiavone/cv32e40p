@@ -32,23 +32,45 @@
 
       @(posedge clk_i)
 
-      if(rvfi_valid) begin
+      if(rvfi_valid[0] | rvfi_valid[1]) begin
 
-        insn_str = $sformatf(
-                        "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h",
-                        rvfi_order[15:0],
-                        rvfi_insn,
-                        rvfi_rs1_addr,
-                        rvfi_rs1_rdata,
-                        rvfi_rs2_addr,
-                        rvfi_rs2_rdata,
-                        rvfi_rd1_addr,
-                        rvfi_rd1_wdata,
-                        rvfi_pc_rdata,
-                        rvfi_mem_addr,
-                        rvfi_mem_rdata,
-                        rvfi_mem_wdata );
-        $fwrite(f, "%s\n", insn_str);
+        if( rvfi_valid[1] ) begin
+          insn_str = $sformatf(
+                          "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h",
+                          rvfi_order[64+15:64],
+                          rvfi_insn[2*32-1:32],
+                          rvfi_rs1_addr[9:5],
+                          rvfi_rs1_rdata[2*32-1:32],
+                          rvfi_rs2_addr[9:5],
+                          rvfi_rs2_rdata[2*32-1:32],
+                          rvfi_rd1_addr[9:5],
+                          rvfi_rd1_wdata[2*32-1:32],
+                          rvfi_pc_rdata[2*32-1:32],
+                          rvfi_mem_addr[2*32-1:32],
+                          rvfi_mem_rdata[2*32-1:32],
+                          rvfi_mem_wdata[2*32-1:32] );
+          $fwrite(f, "%s\n", insn_str);
+        end
+
+        if( rvfi_valid[0] ) begin
+          insn_str = $sformatf(
+                          "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h",
+                          rvfi_order[15:0],
+                          rvfi_insn[31:0],
+                          rvfi_rs1_addr[4:0],
+                          rvfi_rs1_rdata[31:0],
+                          rvfi_rs2_addr[4:0],
+                          rvfi_rs2_rdata[31:0],
+                          rvfi_rd1_addr[4:0],
+                          rvfi_rd1_wdata[31:0],
+                          rvfi_pc_rdata[31:0],
+                          rvfi_mem_addr[31:0],
+                          rvfi_mem_rdata[31:0],
+                          rvfi_mem_wdata[31:0] );
+          $fwrite(f, "%s\n", insn_str);
+        end
+
+
       end
     end
 

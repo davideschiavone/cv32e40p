@@ -731,4 +731,6 @@ parameter C_FLEN = C_RVD     ? 64 : // D ext.
 parameter C_FFLAG             = 5;
 parameter C_RM                = 3;
 
+localparam RVFI_NRET          = 2;
+
 endpackage

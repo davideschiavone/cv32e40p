@@ -253,7 +253,8 @@ module cv32e40p_wrapper import cv32e40p_apu_core_pkg::*;
     .lsu_addr_ex_i            ( core_i.load_store_unit_i.data_addr_int         ),
     .lsu_wdata_ex_i           ( core_i.load_store_unit_i.data_wdata_ex_i       ),
     .lsu_req_ex_i             ( core_i.load_store_unit_i.data_req_o            ),
-    .lsu_misagligned_ex_i     ( core_i.load_store_unit_i.data_misaligned_o     ),
+    .lsu_misagligned_ex_i     ( core_i.load_store_unit_i.data_misaligned_ex_i  ),
+    .lsu_is_misagligned_ex_i  ( core_i.load_store_unit_i.data_misaligned_o     ),
 
     .instr_wb_ready_i         ( core_i.load_store_unit_i.data_rvalid_i         ),
     .rd2_wdata_wb_i           ( core_i.id_stage_i.register_file_i.wdata_a_i    )

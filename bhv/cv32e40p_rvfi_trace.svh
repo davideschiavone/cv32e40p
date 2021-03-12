@@ -26,7 +26,7 @@
     wait(rst_ni == 1'b1);
     $sformat(fn, "trace_rvfi_%h.log", hart_id_i);
     f = $fopen(fn, "w");
-    $fwrite(f, "order\tinsn\trs1_addr\trs1_rdata\trs2_addr\trs2_rdata\trd1_addr\trd1_wdata\t\tpc_rdat\tmem_addr\tmem_rdata\tmem_wdata\n");
+    $fwrite(f, "order\tinsn\trs1_addr\trs1_rdata\trs2_addr\trs2_rdata\trd1_addr\trd1_wdata\t\tpc_rdat\tmem_addr\tmem_rdata\tmem_wdata\tTRAP\tINTR\n");
 
     while(1) begin
 
@@ -36,7 +36,7 @@
 
         if( rvfi_valid[1] ) begin
           insn_str = $sformatf(
-                          "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h",
+                          "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h\t%h\t%h",
                           rvfi_order[64+15:64],
                           rvfi_insn[2*32-1:32],
                           rvfi_rs1_addr[9:5],
@@ -48,13 +48,15 @@
                           rvfi_pc_rdata[2*32-1:32],
                           rvfi_mem_addr[2*32-1:32],
                           rvfi_mem_rdata[2*32-1:32],
-                          rvfi_mem_wdata[2*32-1:32] );
+                          rvfi_mem_wdata[2*32-1:32],
+                          rvfi_trap[1],
+                          rvfi_intr[1] );
           $fwrite(f, "%s\n", insn_str);
         end
 
         if( rvfi_valid[0] ) begin
           insn_str = $sformatf(
-                          "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h",
+                          "%h\t%h\t%h\t%h\t%h\t%h\t%h\t%h\tPC=%h\t%h\t%h\t%h\t%h\t%h",
                           rvfi_order[15:0],
                           rvfi_insn[31:0],
                           rvfi_rs1_addr[4:0],
@@ -66,7 +68,9 @@
                           rvfi_pc_rdata[31:0],
                           rvfi_mem_addr[31:0],
                           rvfi_mem_rdata[31:0],
-                          rvfi_mem_wdata[31:0] );
+                          rvfi_mem_wdata[31:0],
+                          rvfi_trap[0],
+                          rvfi_intr[0] );
           $fwrite(f, "%s\n", insn_str);
         end
 

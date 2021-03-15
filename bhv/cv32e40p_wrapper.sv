@@ -214,6 +214,8 @@ module cv32e40p_wrapper import cv32e40p_apu_core_pkg::*;
 
     .illegal_insn_id_i        ( core_i.id_stage_i.controller_i.illegal_insn_n  ),
     .instr_is_compressed_id_i ( core_i.if_stage_i.is_compressed_id_o           ),
+    .mret_insn_id_i           ( core_i.id_stage_i.controller_i.mret_insn_i     ),
+
     .instr_rdata_c_id_i       ( core_i.if_stage_i.instr_rdata_c_id             ),
     .instr_rdata_id_i         ( core_i.if_stage_i.instr_rdata_id_o             ),
     .instr_id_valid_i         ( core_i.id_stage_i.id_valid_o                   ),
@@ -260,7 +262,12 @@ module cv32e40p_wrapper import cv32e40p_apu_core_pkg::*;
     .rd2_wdata_wb_i           ( core_i.id_stage_i.register_file_i.wdata_a_i    ),
 
     .exception_target_wb_i    ( core_i.if_stage_i.exc_pc                       ),
-    .is_exception_wb_i        ( core_i.if_stage_i.pc_mux_i == PC_EXCEPTION     )
+    .is_exception_wb_i        ( core_i.if_stage_i.pc_mux_i == PC_EXCEPTION     ),
+
+    .mepc_target_wb_i         ( core_i.if_stage_i.mepc_i                       ),
+    .is_mret_wb_i             ( core_i.if_stage_i.pc_mux_i == PC_MRET          ),
+
+    .is_debug_mode            ( core_i.id_stage_i.controller_i.debug_mode_q    )
 
   );
 `endif

@@ -26,6 +26,8 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
 
   input  logic        irq_ack_i,
   input  logic        illegal_insn_id_i,
+  input  logic        mret_insn_id_i,
+
   input  logic        instr_is_compressed_id_i,
   input  logic [15:0] instr_rdata_c_id_i,
   input  logic [31:0] instr_rdata_id_i,
@@ -76,6 +78,12 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
 
   input  logic [31:0] exception_target_wb_i,
   input  logic        is_exception_wb_i,
+
+
+  input  logic [31:0] mepc_target_wb_i,
+  input  logic        is_mret_wb_i,
+
+  input  logic        is_debug_mode,
 
   // RISC-V Formal Interface
   // Does not comply with the coding standards of _i/_o suffixes, but follows
@@ -164,10 +172,22 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   logic [31:0] rvfi_stage_mem_rdata [RVFI_STAGES][RVFI_NRET];
   logic [31:0] rvfi_stage_mem_wdata [RVFI_STAGES][RVFI_NRET];
 
-  logic  [RVFI_STAGES-1:0]      data_req_q   ;
-  logic        data_misagligned_q   ;
-  logic        set_rvfi_intr_q;
+  logic  [RVFI_STAGES-1:0] data_req_q;
+  logic  [RVFI_STAGES-1:0] mret_q;
 
+  logic         data_misagligned_q;
+  logic  [31:0] prev_pc_wdata0_q;
+  logic  [31:0] prev_pc_wdata1_q;
+  logic  [63:0] order0_q;
+  logic  [63:0] order1_q;
+  logic         valid0_q;
+  logic         valid1_q;
+  logic  [31:0] prev_pc_wdata_newst0;
+  logic  [31:0] prev_pc_wdata_newst1;
+  logic         intr1_d;
+  logic         intr0_d;
+  logic         intr1_valid_d;
+  logic         intr0_valid_d;
 
   logic        instr_id_done;
   logic        instr_ex_done;
@@ -185,7 +205,7 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   assign rvfi_insn      [31:0]      = rvfi_stage_insn      [RVFI_STAGES-2][0];
   assign rvfi_trap      [0]         = rvfi_stage_trap      [RVFI_STAGES-2][0];
   assign rvfi_halt      [0]         = rvfi_stage_halt      [RVFI_STAGES-2][0];
-  assign rvfi_intr      [0]         = rvfi_stage_intr      [RVFI_STAGES-2][0];
+  assign rvfi_intr      [0]         = intr0_d;
   assign rvfi_mode      [1:0]       = 2'b11;
   assign rvfi_ixl       [1:0]       = 2'b01;
   assign rvfi_rs1_addr  [4:0]       = rvfi_stage_rs1_addr  [RVFI_STAGES-2][0];
@@ -212,7 +232,7 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   assign rvfi_insn      [2*32-1:32] = rvfi_stage_insn      [RVFI_STAGES-1][1];
   assign rvfi_trap      [1]         = rvfi_stage_trap      [RVFI_STAGES-1][1];
   assign rvfi_halt      [1]         = rvfi_stage_halt      [RVFI_STAGES-1][1];
-  assign rvfi_intr      [1]         = rvfi_stage_intr      [RVFI_STAGES-1][1];
+  assign rvfi_intr      [1]         = intr1_d;;
   assign rvfi_mode      [3:2]       = 2'b11;
   assign rvfi_ixl       [3:2]       = 2'b01;
   assign rvfi_rs1_addr  [9:5]       = rvfi_stage_rs1_addr  [RVFI_STAGES-1][1];
@@ -243,14 +263,17 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
 
   assign instr_wb_done  = instr_wb_ready_i;
 
-
     always_ff @(posedge clk_i or negedge rst_ni) begin
       if (!rst_ni) begin
         ex_stage_ready_q   <= '0;
         ex_stage_valid_q   <= '0;
         data_misagligned_q <= '0;
-        set_rvfi_intr_q    <= '0;
-
+        prev_pc_wdata0_q   <= '0;
+        prev_pc_wdata1_q   <= '0;
+        order0_q           <= '0;
+        order1_q           <= '0;
+        valid0_q           <= '0;
+        valid1_q           <= '0;
       end else begin //1
         /*
             if instr_id_done is 1, it is implied that the EX stage is ready to accept a new instruction, thus ex_stage_ready_q <= 1
@@ -269,14 +292,97 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
                 data_misagligned_q <= 1'b0;
         end //2
 
-        if(rvfi_trap[1] & rvfi_valid[1])
-          set_rvfi_intr_q <= 1'b1;
-        else if(instr_id_done)
-          set_rvfi_intr_q <= 1'b0;
+        if(rvfi_valid[1])
+          {valid1_q, order1_q, prev_pc_wdata1_q} <= {rvfi_valid[1], rvfi_order[2*64-1:64], rvfi_pc_wdata[2*32-1:32]};
+        if(rvfi_valid[0])
+          {valid0_q, order0_q, prev_pc_wdata0_q} <= {rvfi_valid[0], rvfi_order[63:0], rvfi_pc_wdata[31:0]};
 
       end //1
     end //always_ff
 
+
+    always_comb begin
+      prev_pc_wdata_newst0 = '0;
+      prev_pc_wdata_newst1 = '0;
+      intr1_d              = 1'b0;
+      intr0_d              = 1'b0;
+      intr1_valid_d        = 1'b0;
+      intr0_valid_d        = 1'b0;
+
+      //find the newest
+      if(rvfi_valid[1] ^ rvfi_valid[0]) begin
+
+        if(!valid1_q & !valid0_q) begin
+          intr1_d              = 1'b0;
+          intr0_d              = 1'b0;
+        end else begin
+          if(valid1_q & !valid0_q) begin
+            prev_pc_wdata_newst0 = prev_pc_wdata1_q;
+            if(rvfi_valid[1])
+                intr0_valid_d  = rvfi_order[2*64-1:64] - order1_q == 1;
+            else
+                intr0_valid_d  = rvfi_order[63:0] - order1_q == 1;
+          end else if(valid0_q & !valid1_q) begin
+            prev_pc_wdata_newst0 = prev_pc_wdata0_q;
+            if(rvfi_valid[1])
+                intr0_valid_d  = rvfi_order[2*64-1:64] - order0_q == 1;
+            else
+                intr0_valid_d  = rvfi_order[63:0] - order0_q == 1;
+          end else if(valid1_q & valid0_q)
+            if(order0_q > order1_q) begin
+              prev_pc_wdata_newst0 = prev_pc_wdata0_q;
+              if(rvfi_valid[1])
+                  intr0_valid_d  = rvfi_order[2*64-1:64] - order0_q == 1;
+              else
+                  intr0_valid_d  = rvfi_order[63:0]      - order0_q == 1;
+            end else begin
+              prev_pc_wdata_newst0 = prev_pc_wdata1_q;
+              if(rvfi_valid[1])
+                  intr0_valid_d  = rvfi_order[2*64-1:64] - order1_q == 1;
+              else
+                  intr0_valid_d  = rvfi_order[63:0]      - order1_q == 1;
+            end
+          intr1_d = rvfi_valid[1] & (rvfi_pc_rdata[2*32-1:32] != prev_pc_wdata_newst0) & intr0_valid_d;
+          intr0_d = rvfi_valid[0] & (rvfi_pc_rdata[31:0]      != prev_pc_wdata_newst0) & intr0_valid_d;
+        end
+      end
+
+      else if(rvfi_valid[1] & rvfi_valid[0]) begin //both true
+
+        //instr1 is the oldest
+        if(rvfi_order[2*64-1:64] < rvfi_order[63:0]) begin
+
+          //instr0 prev is instr1
+          prev_pc_wdata_newst0 = rvfi_pc_wdata[2*32-1:32];
+          intr0_valid_d        = rvfi_order[63:0] - rvfi_order[2*64-1:64] == 1;
+
+          if(valid1_q & !valid0_q) begin
+            prev_pc_wdata_newst1 = prev_pc_wdata1_q;
+            intr1_valid_d        = rvfi_order[2*64-1:64] - order1_q == 1;
+          end else if(valid0_q & !valid1_q) begin
+            prev_pc_wdata_newst1 = prev_pc_wdata0_q;
+            intr1_valid_d        = rvfi_order[2*64-1:64] - order0_q == 1;
+          end else if(valid1_q & valid0_q) begin
+            if(order0_q > order1_q) begin
+              prev_pc_wdata_newst1 = prev_pc_wdata0_q;
+              intr1_valid_d  = rvfi_order[2*64-1:64] - order0_q == 1;
+            end else begin
+              prev_pc_wdata_newst1 = prev_pc_wdata1_q;
+              intr1_valid_d  = rvfi_order[2*64-1:64] - order1_q == 1;
+            end
+          end
+
+          intr1_d = rvfi_valid[1] & (rvfi_pc_rdata[2*32-1:32] != prev_pc_wdata_newst1)& intr1_valid_d;
+          intr0_d = rvfi_valid[0] & (rvfi_pc_rdata[31:0]      != prev_pc_wdata_newst0)& intr0_valid_d;
+
+        end else begin
+          //instr0 is the oldest
+          $display("[ERROR] Instr1 is newer than Instr0 at time %t",$time);
+          $stop;
+        end
+
+      end
+    end
 
   for (genvar i = 0;i < RVFI_STAGES; i = i + 1) begin : g_rvfi_stages
     always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -329,7 +435,8 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
         rvfi_stage_mem_wdata[i][1] <= '0;
         rvfi_stage_mem_addr[i][1]  <= '0;
 
-        data_req_q[i]           <= '0;
+        data_req_q[i]              <= '0;
+        mret_q[i]                  <= '0;
 
 
       end else begin
@@ -344,7 +451,7 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
 
             rvfi_stage_halt[i][0]      <= '0;
             rvfi_stage_trap[i][0]      <= illegal_insn_id_i;
-            rvfi_stage_intr[i][0]      <= set_rvfi_intr_q;
+            rvfi_stage_intr[i][0]      <= 1'b0;
             rvfi_stage_order[i][0]     <= rvfi_stage_order[i][0] + 64'b1;
             rvfi_stage_insn[i][0]      <= rvfi_insn_id;
 
@@ -364,13 +471,14 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
             rvfi_stage_mem_wmask[i][0] <= lsu_req_id_i & lsu_we_id_i ? rvfi_mem_mask_int : 4'b0000;
 
             data_req_q[i]              <= lsu_req_id_i;
+            mret_q[i]                  <= mret_insn_id_i;
 
           end
         end else if (i == 1) begin
           // Signals valid in EX stage
 
           //instructions retiring in the EX stage
-          if(instr_ex_done & !data_req_q[i-1] & !rvfi_stage_trap[i-1][0]) begin
+          if(instr_ex_done & !data_req_q[i-1] & !(rvfi_stage_trap[i-1][0] || mret_q[i-1])) begin
 
             rvfi_stage_valid[i][0]     <= ex_stage_ready_q;
 
@@ -399,7 +507,11 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
             rvfi_stage_mem_addr[i][0]  <= rvfi_mem_addr_d;
             rvfi_stage_mem_wdata[i][0] <= rvfi_mem_wdata_d;
 
-            data_req_q[i]              <= data_req_q[i-1];
+            if(data_req_q[i]) begin
+              if(instr_wb_done & rvfi_stage_valid[i][1] & !data_misagligned_q)
+                data_req_q[i] <= 1'b0;
+            end
+            mret_q[i]                  <= mret_q[i-1];
 
           end else rvfi_stage_valid[i][0] <= 1'b0;
 
@@ -434,11 +546,12 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
               rvfi_stage_mem_addr[i][1]  <= rvfi_mem_addr_d;
               rvfi_stage_mem_wdata[i][1] <= rvfi_mem_wdata_d;
               data_req_q[i]              <= data_req_q[i-1];
+              mret_q[i]                  <= mret_q[i-1];
             end
           end
 
           //instructions retiring in the WB stage
-          if(instr_ex_valid_i & rvfi_stage_trap[i-1][0]) begin
+          if(instr_ex_valid_i & (rvfi_stage_trap[i-1][0] || mret_q[i-1])) begin
               rvfi_stage_valid[i][1]     <= ex_stage_valid_q;
 
               rvfi_stage_halt[i][1]      <= rvfi_stage_halt[i-1][0];
@@ -465,7 +578,8 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
               rvfi_stage_mem_wmask[i][1] <= rvfi_stage_mem_wmask[i-1][0];
               rvfi_stage_mem_addr[i][1]  <= rvfi_mem_addr_d;
               rvfi_stage_mem_wdata[i][1] <= rvfi_mem_wdata_d;
-              data_req_q[i]              <= data_req_q[i-1];
+              data_req_q[i]              <= 1'b0;
+              mret_q[i]                  <= mret_q[i-1];
           end
 
         end else if (i == 2) begin
@@ -527,15 +641,45 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
               rvfi_stage_rd2_wdata[i][1] <= rvfi_stage_rd2_wdata[i-1][1];
 
               rvfi_stage_pc_rdata[i][1]  <= rvfi_stage_pc_rdata[i-1][1];
-              rvfi_stage_pc_wdata[i][1]  <= pc_set_i & is_exception_wb_i ? exception_target_wb_i : rvfi_stage_pc_wdata[i-1][1];
+              rvfi_stage_pc_wdata[i][1]  <= rvfi_stage_pc_wdata[i-1][1];
 
               rvfi_stage_mem_rmask[i][1] <= rvfi_stage_mem_rmask[i-1][1];
               rvfi_stage_mem_wmask[i][1] <= rvfi_stage_mem_wmask[i-1][1];
               rvfi_stage_mem_addr[i][1]  <= rvfi_stage_mem_addr[i-1][1];
               rvfi_stage_mem_wdata[i][1] <= rvfi_stage_mem_wdata[i-1][1];
-              rvfi_stage_mem_rdata[i][1] <= rvfi_rd2_wdata_d;
+              rvfi_stage_mem_rdata[i][1] <= rvfi_stage_mem_rdata[i-1][1];
             end //instr_wb_done
+            (mret_q[i-1] & rvfi_stage_valid[i-1][1] )|| mret_q[i]: begin
+              //the MRET retires in one extra cycle, thus
+              rvfi_stage_valid[i][1]     <= mret_q[i];
+              rvfi_stage_halt[i][1]      <= rvfi_stage_halt[i-1][1];
+              rvfi_stage_trap[i][1]      <= rvfi_stage_trap[i-1][1];
+              rvfi_stage_intr[i][1]      <= rvfi_stage_intr[i-1][1];
+              rvfi_stage_order[i][1]     <= rvfi_stage_order[i-1][1];
+              rvfi_stage_insn[i][1]      <= rvfi_stage_insn[i-1][1];
 
+              rvfi_stage_rs1_addr[i][1]  <= rvfi_stage_rs1_addr[i-1][1];
+              rvfi_stage_rs2_addr[i][1]  <= rvfi_stage_rs2_addr[i-1][1];
+              rvfi_stage_rs3_addr[i][1]  <= rvfi_stage_rs3_addr[i-1][1];
+              rvfi_stage_rs1_rdata[i][1] <= rvfi_stage_rs1_rdata[i-1][1];
+              rvfi_stage_rs2_rdata[i][1] <= rvfi_stage_rs2_rdata[i-1][1];
+              rvfi_stage_rs3_rdata[i][1] <= rvfi_stage_rs3_rdata[i-1][1];
+              rvfi_stage_rd1_addr[i][1]  <= rvfi_stage_rd1_addr[i-1][1];
+              rvfi_stage_rd2_addr[i][1]  <= rvfi_stage_rd2_addr[i-1][1];
+              rvfi_stage_rd1_wdata[i][1] <= rvfi_stage_rd1_wdata[i-1][1];
+              // If writing to x0 zero write data as required by RVFI specification
+              rvfi_stage_rd2_wdata[i][1] <= rvfi_stage_rd2_wdata[i-1][1];
+
+              rvfi_stage_pc_rdata[i][1]  <= rvfi_stage_pc_rdata[i-1][1];
+              rvfi_stage_pc_wdata[i][1]  <= is_mret_wb_i ? mepc_target_wb_i : exception_target_wb_i;
+
+              rvfi_stage_mem_rmask[i][1] <= rvfi_stage_mem_rmask[i-1][1];
+              rvfi_stage_mem_wmask[i][1] <= rvfi_stage_mem_wmask[i-1][1];
+              rvfi_stage_mem_addr[i][1]  <= rvfi_stage_mem_addr[i-1][1];
+              rvfi_stage_mem_wdata[i][1] <= rvfi_stage_mem_wdata[i-1][1];
+              rvfi_stage_mem_rdata[i][1] <= rvfi_stage_mem_rdata[i-1][1];
+              mret_q[i]                  <= !mret_q[i];
+            end //instr_wb_done
             default:
               rvfi_stage_valid[i][1]     <= 1'b0;
             endcase

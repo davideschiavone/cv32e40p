@@ -18,37 +18,65 @@
 // Contributor: Davide Schiavone <davide@openhwgroup.org>
 
   typedef struct packed {
-    logic        rvfi_stage_valid     ;
-    logic [63:0] rvfi_stage_order     ;
-    logic [31:0] rvfi_stage_insn      ;
-    logic        rvfi_stage_trap      ;
-    logic        rvfi_stage_halt      ;
-    logic        rvfi_stage_intr      ;
-    logic [ 4:0] rvfi_stage_rs1_addr  ;
-    logic [ 4:0] rvfi_stage_rs2_addr  ;
-    logic [ 4:0] rvfi_stage_rs3_addr  ;
-    logic [31:0] rvfi_stage_rs1_rdata ;
-    logic [31:0] rvfi_stage_rs2_rdata ;
-    logic [31:0] rvfi_stage_rs3_rdata ;
-    logic [ 4:0] rvfi_stage_rd1_addr  ;
-    logic [ 4:0] rvfi_stage_rd2_addr  ;
-    logic [31:0] rvfi_stage_rd1_wdata ;
-    logic [31:0] rvfi_stage_rd2_wdata ;
-    logic [31:0] rvfi_stage_pc_rdata  ;
-    logic [31:0] rvfi_stage_pc_wdata  ;
-    logic [31:0] rvfi_stage_mem_addr  ;
-    logic [ 3:0] rvfi_stage_mem_rmask ;
-    logic [ 3:0] rvfi_stage_mem_wmask ;
-    logic [31:0] rvfi_stage_mem_rdata ;
-    logic [31:0] rvfi_stage_mem_wdata ;
+    logic        rvfi_valid     ;
+    logic [63:0] rvfi_order     ;
+    logic [31:0] rvfi_insn      ;
+    logic        rvfi_trap      ;
+    logic        rvfi_halt      ;
+    logic        rvfi_intr      ;
+    logic [ 4:0] rvfi_rs1_addr  ;
+    logic [ 4:0] rvfi_rs2_addr  ;
+    logic [ 4:0] rvfi_rs3_addr  ;
+    logic [31:0] rvfi_rs1_rdata ;
+    logic [31:0] rvfi_rs2_rdata ;
+    logic [31:0] rvfi_rs3_rdata ;
+    logic [ 4:0] rvfi_rd1_addr  ;
+    logic [ 4:0] rvfi_rd2_addr  ;
+    logic [31:0] rvfi_rd1_wdata ;
+    logic [31:0] rvfi_rd2_wdata ;
+    logic [31:0] rvfi_pc_rdata  ;
+    logic [31:0] rvfi_pc_wdata  ;
+    logic [31:0] rvfi_mem_addr  ;
+    logic [ 3:0] rvfi_mem_rmask ;
+    logic [ 3:0] rvfi_mem_wmask ;
+    logic [31:0] rvfi_mem_rdata ;
+    logic [31:0] rvfi_mem_wdata ;
   } rvfi_instr_t;
 
-
-
+  typedef struct packed {
+    logic        valid     ;
+    logic [63:0] order     ;
+    logic [31:0] pc_wdata  ;
+  } rvfi_intr_t;
 
   integer      f;
   string       fn;
   string insn_str;
+
+
+  function rvfi_intr_t find_last_instr(input rvfi_intr_t instr_1, input rvfi_intr_t instr_0 );
+   begin
+
+    rvfi_intr_t last_instr;
+
+    if(instr_1.valid & !instr_0.valid) begin
+      last_instr = instr_1;
+    end else if(instr_0.valid & !instr_1.valid) begin
+      last_instr = instr_0;
+    end else if(instr_1.valid & instr_0.valid) begin
+      if(instr_0.order > instr_1.order) begin
+        last_instr = instr_0;
+      end else begin
+        last_instr = instr_1;
+      end
+    end else begin
+      last_instr = '0;
+    end
+
+    return last_instr;
+   end
+  endfunction
+
 
   initial begin
 

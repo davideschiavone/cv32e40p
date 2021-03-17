@@ -21,30 +21,8 @@ if {$rvcores_rvfi ne ""} {
 
   add wave -group "RVFI"                       $rvcores_rvfi/*
 
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_valid
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_order
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_insn
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_trap
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_halt
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_intr
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rs1_addr
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rs2_addr
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rs3_addr
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rs1_rdata
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rs2_rdata
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rs3_rdata
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rd1_addr
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rd2_addr
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rd1_wdata
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_rd2_wdata
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_pc_rdata
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_pc_wdata
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_mem_addr
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_mem_rmask
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_mem_wmask
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_mem_rdata
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage_mem_wdata
-  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/data_misagligned_q
+  add wave -group "RVFI" -group "Stage"        $rvcores_rvfi/rvfi_stage
+
 }
 
 configure wave -namecolwidth  250

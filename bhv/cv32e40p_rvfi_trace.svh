@@ -17,6 +17,35 @@
 // Includes to print info about the RVFI output
 // Contributor: Davide Schiavone <davide@openhwgroup.org>
 
+  typedef struct packed {
+    logic        rvfi_stage_valid     ;
+    logic [63:0] rvfi_stage_order     ;
+    logic [31:0] rvfi_stage_insn      ;
+    logic        rvfi_stage_trap      ;
+    logic        rvfi_stage_halt      ;
+    logic        rvfi_stage_intr      ;
+    logic [ 4:0] rvfi_stage_rs1_addr  ;
+    logic [ 4:0] rvfi_stage_rs2_addr  ;
+    logic [ 4:0] rvfi_stage_rs3_addr  ;
+    logic [31:0] rvfi_stage_rs1_rdata ;
+    logic [31:0] rvfi_stage_rs2_rdata ;
+    logic [31:0] rvfi_stage_rs3_rdata ;
+    logic [ 4:0] rvfi_stage_rd1_addr  ;
+    logic [ 4:0] rvfi_stage_rd2_addr  ;
+    logic [31:0] rvfi_stage_rd1_wdata ;
+    logic [31:0] rvfi_stage_rd2_wdata ;
+    logic [31:0] rvfi_stage_pc_rdata  ;
+    logic [31:0] rvfi_stage_pc_wdata  ;
+    logic [31:0] rvfi_stage_mem_addr  ;
+    logic [ 3:0] rvfi_stage_mem_rmask ;
+    logic [ 3:0] rvfi_stage_mem_wmask ;
+    logic [31:0] rvfi_stage_mem_rdata ;
+    logic [31:0] rvfi_stage_mem_wdata ;
+  } rvfi_instr_t;
+
+
+
+
   integer      f;
   string       fn;
   string insn_str;

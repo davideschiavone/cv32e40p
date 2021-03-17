@@ -73,7 +73,7 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   input  logic        lsu_misagligned_ex_i,
   input  logic        lsu_is_misagligned_ex_i,
 
-  input  logic        instr_wb_ready_i,
+  input  logic        lsu_rvalid_wb_i,
   input  logic [31:0] rd2_wdata_wb_i,
 
   input  logic [31:0] exception_target_wb_i,
@@ -148,29 +148,6 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   // => RVFI_out)
   localparam int RVFI_STAGES = 3;
 
-  logic        rvfi_stage_valid     [RVFI_STAGES][RVFI_NRET];
-  logic [63:0] rvfi_stage_order     [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_insn      [RVFI_STAGES][RVFI_NRET];
-  logic        rvfi_stage_trap      [RVFI_STAGES][RVFI_NRET];
-  logic        rvfi_stage_halt      [RVFI_STAGES][RVFI_NRET];
-  logic        rvfi_stage_intr      [RVFI_STAGES][RVFI_NRET];
-  logic [ 4:0] rvfi_stage_rs1_addr  [RVFI_STAGES][RVFI_NRET];
-  logic [ 4:0] rvfi_stage_rs2_addr  [RVFI_STAGES][RVFI_NRET];
-  logic [ 4:0] rvfi_stage_rs3_addr  [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_rs1_rdata [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_rs2_rdata [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_rs3_rdata [RVFI_STAGES][RVFI_NRET];
-  logic [ 4:0] rvfi_stage_rd1_addr  [RVFI_STAGES][RVFI_NRET];
-  logic [ 4:0] rvfi_stage_rd2_addr  [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_rd1_wdata [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_rd2_wdata [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_pc_rdata  [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_pc_wdata  [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_mem_addr  [RVFI_STAGES][RVFI_NRET];
-  logic [ 3:0] rvfi_stage_mem_rmask [RVFI_STAGES][RVFI_NRET];
-  logic [ 3:0] rvfi_stage_mem_wmask [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_mem_rdata [RVFI_STAGES][RVFI_NRET];
-  logic [31:0] rvfi_stage_mem_wdata [RVFI_STAGES][RVFI_NRET];
 
   logic  [RVFI_STAGES-1:0] data_req_q;
   logic  [RVFI_STAGES-1:0] mret_q;
@@ -190,78 +167,73 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   logic         intr0_valid_d;
 
   logic        instr_id_done;
-  logic        instr_ex_done;
-  logic        instr_wb_done;
 
   logic        ex_stage_ready_q;
   logic        ex_stage_valid_q;
 
   `include "cv32e40p_rvfi_trace.svh"
 
+  rvfi_instr_t rvfi_inst [RVFI_STAGES][RVFI_NRET];
 
   //instructions retiring in the EX stage
-  assign rvfi_valid     [0]         = rvfi_stage_valid     [RVFI_STAGES-2][0];
-  assign rvfi_order     [63:0]      = rvfi_stage_order     [RVFI_STAGES-2][0];
-  assign rvfi_insn      [31:0]      = rvfi_stage_insn      [RVFI_STAGES-2][0];
-  assign rvfi_trap      [0]         = rvfi_stage_trap      [RVFI_STAGES-2][0];
-  assign rvfi_halt      [0]         = rvfi_stage_halt      [RVFI_STAGES-2][0];
+  assign rvfi_valid     [0]         = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_valid     ;
+  assign rvfi_order     [63:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_order     ;
+  assign rvfi_insn      [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_insn      ;
+  assign rvfi_trap      [0]         = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_trap      ;
+  assign rvfi_halt      [0]         = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_halt      ;
   assign rvfi_intr      [0]         = intr0_d;
   assign rvfi_mode      [1:0]       = 2'b11;
   assign rvfi_ixl       [1:0]       = 2'b01;
-  assign rvfi_rs1_addr  [4:0]       = rvfi_stage_rs1_addr  [RVFI_STAGES-2][0];
-  assign rvfi_rs2_addr  [4:0]       = rvfi_stage_rs2_addr  [RVFI_STAGES-2][0];
-  assign rvfi_rs3_addr  [4:0]       = rvfi_stage_rs3_addr  [RVFI_STAGES-2][0];
-  assign rvfi_rs1_rdata [31:0]      = rvfi_stage_rs1_rdata [RVFI_STAGES-2][0];
-  assign rvfi_rs2_rdata [31:0]      = rvfi_stage_rs2_rdata [RVFI_STAGES-2][0];
-  assign rvfi_rs3_rdata [31:0]      = rvfi_stage_rs3_rdata [RVFI_STAGES-2][0];
-  assign rvfi_rd1_addr  [4:0]       = rvfi_stage_rd1_addr  [RVFI_STAGES-2][0];
-  assign rvfi_rd2_addr  [4:0]       = rvfi_stage_rd2_addr  [RVFI_STAGES-2][0];
-  assign rvfi_rd1_wdata [31:0]      = rvfi_stage_rd1_wdata [RVFI_STAGES-2][0];
-  assign rvfi_rd2_wdata [31:0]      = rvfi_stage_rd2_wdata [RVFI_STAGES-2][0];
-  assign rvfi_pc_rdata  [31:0]      = rvfi_stage_pc_rdata  [RVFI_STAGES-2][0];
-  assign rvfi_pc_wdata  [31:0]      = rvfi_stage_pc_wdata  [RVFI_STAGES-2][0];
-  assign rvfi_mem_addr  [31:0]      = rvfi_stage_mem_addr  [RVFI_STAGES-2][0];
-  assign rvfi_mem_rmask [3:0]       = rvfi_stage_mem_rmask [RVFI_STAGES-2][0];
-  assign rvfi_mem_wmask [3:0]       = rvfi_stage_mem_wmask [RVFI_STAGES-2][0];
-  assign rvfi_mem_rdata [31:0]      = rvfi_stage_mem_rdata [RVFI_STAGES-2][0];
-  assign rvfi_mem_wdata [31:0]      = rvfi_stage_mem_wdata [RVFI_STAGES-2][0];
+  assign rvfi_rs1_addr  [4:0]       = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rs1_addr  ;
+  assign rvfi_rs2_addr  [4:0]       = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rs2_addr  ;
+  assign rvfi_rs3_addr  [4:0]       = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rs3_addr  ;
+  assign rvfi_rs1_rdata [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rs1_rdata ;
+  assign rvfi_rs2_rdata [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rs2_rdata ;
+  assign rvfi_rs3_rdata [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rs3_rdata ;
+  assign rvfi_rd1_addr  [4:0]       = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rd1_addr  ;
+  assign rvfi_rd2_addr  [4:0]       = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rd2_addr  ;
+  assign rvfi_rd1_wdata [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rd1_wdata ;
+  assign rvfi_rd2_wdata [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_rd2_wdata ;
+  assign rvfi_pc_rdata  [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_pc_rdata  ;
+  assign rvfi_pc_wdata  [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_pc_wdata  ;
+  assign rvfi_mem_addr  [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_mem_addr  ;
+  assign rvfi_mem_rmask [3:0]       = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_mem_rmask ;
+  assign rvfi_mem_wmask [3:0]       = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_mem_wmask ;
+  assign rvfi_mem_rdata [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_mem_rdata ;
+  assign rvfi_mem_wdata [31:0]      = rvfi_inst[RVFI_STAGES-2][0].rvfi_stage_mem_wdata ;
 
   //instructions retiring in the WB stage
-  assign rvfi_valid     [1]         = rvfi_stage_valid     [RVFI_STAGES-1][1];
-  assign rvfi_order     [2*64-1:64] = rvfi_stage_order     [RVFI_STAGES-1][1];
-  assign rvfi_insn      [2*32-1:32] = rvfi_stage_insn      [RVFI_STAGES-1][1];
-  assign rvfi_trap      [1]         = rvfi_stage_trap      [RVFI_STAGES-1][1];
-  assign rvfi_halt      [1]         = rvfi_stage_halt      [RVFI_STAGES-1][1];
+  assign rvfi_valid     [1]         = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_valid     ;
+  assign rvfi_order     [2*64-1:64] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_order     ;
+  assign rvfi_insn      [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_insn      ;
+  assign rvfi_trap      [1]         = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_trap      ;
+  assign rvfi_halt      [1]         = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_halt      ;
   assign rvfi_intr      [1]         = intr1_d;;
   assign rvfi_mode      [3:2]       = 2'b11;
   assign rvfi_ixl       [3:2]       = 2'b01;
-  assign rvfi_rs1_addr  [9:5]       = rvfi_stage_rs1_addr  [RVFI_STAGES-1][1];
-  assign rvfi_rs2_addr  [9:5]       = rvfi_stage_rs2_addr  [RVFI_STAGES-1][1];
-  assign rvfi_rs3_addr  [9:5]       = rvfi_stage_rs3_addr  [RVFI_STAGES-1][1];
-  assign rvfi_rs1_rdata [2*32-1:32] = rvfi_stage_rs1_rdata [RVFI_STAGES-1][1];
-  assign rvfi_rs2_rdata [2*32-1:32] = rvfi_stage_rs2_rdata [RVFI_STAGES-1][1];
-  assign rvfi_rs3_rdata [2*32-1:32] = rvfi_stage_rs3_rdata [RVFI_STAGES-1][1];
-  assign rvfi_rd1_addr  [9:5]       = rvfi_stage_rd1_addr  [RVFI_STAGES-1][1];
-  assign rvfi_rd2_addr  [9:5]       = rvfi_stage_rd2_addr  [RVFI_STAGES-1][1];
-  assign rvfi_rd1_wdata [2*32-1:32] = rvfi_stage_rd1_wdata [RVFI_STAGES-1][1];
-  assign rvfi_rd2_wdata [2*32-1:32] = rvfi_stage_rd2_wdata [RVFI_STAGES-1][1];
-  assign rvfi_pc_rdata  [2*32-1:32] = rvfi_stage_pc_rdata  [RVFI_STAGES-1][1];
-  assign rvfi_pc_wdata  [2*32-1:32] = rvfi_stage_pc_wdata  [RVFI_STAGES-1][1];
-  assign rvfi_mem_addr  [2*32-1:32] = rvfi_stage_mem_addr  [RVFI_STAGES-1][1];
-  assign rvfi_mem_rmask [7:4]       = rvfi_stage_mem_rmask [RVFI_STAGES-1][1];
-  assign rvfi_mem_wmask [7:4]       = rvfi_stage_mem_wmask [RVFI_STAGES-1][1];
-  assign rvfi_mem_rdata [2*32-1:32] = rvfi_stage_mem_rdata [RVFI_STAGES-1][1];
-  assign rvfi_mem_wdata [2*32-1:32] = rvfi_stage_mem_wdata [RVFI_STAGES-1][1];
+  assign rvfi_rs1_addr  [9:5]       = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rs1_addr  ;
+  assign rvfi_rs2_addr  [9:5]       = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rs2_addr  ;
+  assign rvfi_rs3_addr  [9:5]       = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rs3_addr  ;
+  assign rvfi_rs1_rdata [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rs1_rdata ;
+  assign rvfi_rs2_rdata [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rs2_rdata ;
+  assign rvfi_rs3_rdata [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rs3_rdata ;
+  assign rvfi_rd1_addr  [9:5]       = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rd1_addr  ;
+  assign rvfi_rd2_addr  [9:5]       = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rd2_addr  ;
+  assign rvfi_rd1_wdata [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rd1_wdata ;
+  assign rvfi_rd2_wdata [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_rd2_wdata ;
+  assign rvfi_pc_rdata  [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_pc_rdata  ;
+  assign rvfi_pc_wdata  [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_pc_wdata  ;
+  assign rvfi_mem_addr  [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_mem_addr  ;
+  assign rvfi_mem_rmask [7:4]       = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_mem_rmask ;
+  assign rvfi_mem_wmask [7:4]       = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_mem_wmask ;
+  assign rvfi_mem_rdata [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_mem_rdata ;
+  assign rvfi_mem_wdata [2*32-1:32] = rvfi_inst[RVFI_STAGES-1][1].rvfi_stage_mem_wdata ;
 
   // An instruction in the ID stage is valid (instr_id_valid_i)
   // when it's not stalled by the EX stage
   // due to stalls in the EX stage, data hazards, or if it is not halted by the controller
   // as due interrupts, debug requests, illegal instructions, ebreaks and ecalls
   assign instr_id_done  = instr_id_valid_i & instr_id_is_decoding_i;
-
-  assign instr_ex_done  = instr_ex_ready_i;
-
-  assign instr_wb_done  = instr_wb_ready_i;
 
     always_ff @(posedge clk_i or negedge rst_ni) begin
       if (!rst_ni) begin
@@ -277,17 +249,17 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
       end else begin //1
         /*
             if instr_id_done is 1, it is implied that the EX stage is ready to accept a new instruction, thus ex_stage_ready_q <= 1
-            if not, if instr_ex_done is 1 (i.e. ex_ready_i), we clean up the ex_stage_ready_q (if not id_done which has higher priority)
-                    otherwise, if instr_ex_done is 0, we keep the old value to say that the instruction is valid but not complete or not valid
+            if not, if instr_ex_ready_i is 1 (i.e. ex_ready_i), we clean up the ex_stage_ready_q (if not id_done which has higher priority)
+                    otherwise, if instr_ex_ready_i is 0, we keep the old value to say that the instruction is valid but not complete or not valid
         */
-        ex_stage_ready_q       <= instr_id_done ? 1'b1 : ( instr_ex_done == 1'b0 ? ex_stage_ready_q : 1'b0);
+        ex_stage_ready_q       <= instr_id_done ? 1'b1 : ( instr_ex_ready_i == 1'b0 ? ex_stage_ready_q : 1'b0);
 
         ex_stage_valid_q       <= instr_id_done ? 1'b1 : ( instr_ex_valid_i == 1'b0 ? ex_stage_valid_q : 1'b0);
 
-        if (instr_ex_done & data_req_q[0] & !lsu_misagligned_ex_i) begin
+        if (instr_ex_ready_i & data_req_q[0] & !lsu_misagligned_ex_i) begin
           data_misagligned_q <= lsu_is_misagligned_ex_i;
         end else begin //2
-           if (instr_wb_done)
+           if (lsu_rvalid_wb_i)
               if(data_misagligned_q)
                 data_misagligned_q <= 1'b0;
         end //2
@@ -387,57 +359,12 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   for (genvar i = 0;i < RVFI_STAGES; i = i + 1) begin : g_rvfi_stages
     always_ff @(posedge clk_i or negedge rst_ni) begin
       if (!rst_ni) begin
-        rvfi_stage_halt[i][0]      <= '0;
-        rvfi_stage_trap[i][0]      <= '0;
-        rvfi_stage_intr[i][0]      <= '0;
-        rvfi_stage_order[i][0]     <= '0;
-        rvfi_stage_insn[i][0]      <= '0;
-        rvfi_stage_rs1_addr[i][0]  <= '0;
-        rvfi_stage_rs2_addr[i][0]  <= '0;
-        rvfi_stage_rs3_addr[i][0]  <= '0;
-        rvfi_stage_pc_rdata[i][0]  <= '0;
-        rvfi_stage_pc_wdata[i][0]  <= '0;
-        rvfi_stage_mem_rmask[i][0] <= '0;
-        rvfi_stage_mem_wmask[i][0] <= '0;
-        rvfi_stage_valid[i][0]     <= '0;
-        rvfi_stage_rs1_rdata[i][0] <= '0;
-        rvfi_stage_rs2_rdata[i][0] <= '0;
-        rvfi_stage_rs3_rdata[i][0] <= '0;
-        rvfi_stage_rd1_wdata[i][0] <= '0;
-        rvfi_stage_rd2_wdata[i][0] <= '0;
-        rvfi_stage_rd1_addr[i][0]  <= '0;
-        rvfi_stage_rd2_addr[i][0]  <= '0;
-        rvfi_stage_mem_rdata[i][0] <= '0;
-        rvfi_stage_mem_wdata[i][0] <= '0;
-        rvfi_stage_mem_addr[i][0]  <= '0;
 
-        rvfi_stage_halt[i][1]      <= '0;
-        rvfi_stage_trap[i][1]      <= '0;
-        rvfi_stage_intr[i][1]      <= '0;
-        rvfi_stage_order[i][1]     <= '0;
-        rvfi_stage_insn[i][1]      <= '0;
-        rvfi_stage_rs1_addr[i][1]  <= '0;
-        rvfi_stage_rs2_addr[i][1]  <= '0;
-        rvfi_stage_rs3_addr[i][1]  <= '0;
-        rvfi_stage_pc_rdata[i][1]  <= '0;
-        rvfi_stage_pc_wdata[i][1]  <= '0;
-        rvfi_stage_mem_rmask[i][1] <= '0;
-        rvfi_stage_mem_wmask[i][1] <= '0;
-        rvfi_stage_valid[i][1]     <= '0;
-        rvfi_stage_rs1_rdata[i][1] <= '0;
-        rvfi_stage_rs2_rdata[i][1] <= '0;
-        rvfi_stage_rs3_rdata[i][1] <= '0;
-        rvfi_stage_rd1_wdata[i][1] <= '0;
-        rvfi_stage_rd2_wdata[i][1] <= '0;
-        rvfi_stage_rd1_addr[i][1]  <= '0;
-        rvfi_stage_rd2_addr[i][1]  <= '0;
-        rvfi_stage_mem_rdata[i][1] <= '0;
-        rvfi_stage_mem_wdata[i][1] <= '0;
-        rvfi_stage_mem_addr[i][1]  <= '0;
+        rvfi_inst[i][0]            <= rvfi_instr_t'(0);
+        rvfi_inst[i][1]            <= rvfi_instr_t'(0);
 
         data_req_q[i]              <= '0;
         mret_q[i]                  <= '0;
-
 
       end else begin
 
@@ -445,141 +372,94 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
         // all the instructions treated the same
         if (i == 0) begin
 
-          rvfi_stage_valid[i][0]    <= instr_id_done;
+          rvfi_inst[i][0].rvfi_stage_valid    <= instr_id_done;
 
           if(instr_id_done) begin
 
-            rvfi_stage_halt[i][0]      <= '0;
-            rvfi_stage_trap[i][0]      <= illegal_insn_id_i;
-            rvfi_stage_intr[i][0]      <= 1'b0;
-            rvfi_stage_order[i][0]     <= rvfi_stage_order[i][0] + 64'b1;
-            rvfi_stage_insn[i][0]      <= rvfi_insn_id;
+            rvfi_inst[i][0].rvfi_stage_halt      <= '0;
+            rvfi_inst[i][0].rvfi_stage_trap      <= illegal_insn_id_i;
+            rvfi_inst[i][0].rvfi_stage_intr      <= 1'b0;
+            rvfi_inst[i][0].rvfi_stage_order     <= rvfi_inst[i][0].rvfi_stage_order + 64'b1;
+            rvfi_inst[i][0].rvfi_stage_insn      <= rvfi_insn_id;
 
-            rvfi_stage_rs1_addr[i][0]  <= rvfi_rs1_addr_d;
-            rvfi_stage_rs2_addr[i][0]  <= rvfi_rs2_addr_d;
-            rvfi_stage_rs3_addr[i][0]  <= rvfi_rs3_addr_d;
-            rvfi_stage_rs1_rdata[i][0] <= rvfi_rs1_data_d;
-            rvfi_stage_rs2_rdata[i][0] <= rvfi_rs2_data_d;
-            rvfi_stage_rs3_rdata[i][0] <= rvfi_rs3_data_d;
-            rvfi_stage_rd1_addr[i][0]  <= rvfi_rd1_addr_d;
-            rvfi_stage_rd2_addr[i][0]  <= rvfi_rd2_addr_d;
+            rvfi_inst[i][0].rvfi_stage_rs1_addr  <= rvfi_rs1_addr_d;
+            rvfi_inst[i][0].rvfi_stage_rs2_addr  <= rvfi_rs2_addr_d;
+            rvfi_inst[i][0].rvfi_stage_rs3_addr  <= rvfi_rs3_addr_d;
+            rvfi_inst[i][0].rvfi_stage_rs1_rdata <= rvfi_rs1_data_d;
+            rvfi_inst[i][0].rvfi_stage_rs2_rdata <= rvfi_rs2_data_d;
+            rvfi_inst[i][0].rvfi_stage_rs3_rdata <= rvfi_rs3_data_d;
+            rvfi_inst[i][0].rvfi_stage_rd1_addr  <= rvfi_rd1_addr_d;
+            rvfi_inst[i][0].rvfi_stage_rd2_addr  <= rvfi_rd2_addr_d;
 
-            rvfi_stage_pc_rdata[i][0]  <= pc_id_i;
-            rvfi_stage_pc_wdata[i][0]  <= pc_set_i & is_jump_id_i ? jump_target_id_i : pc_if_i;
+            rvfi_inst[i][0].rvfi_stage_pc_rdata  <= pc_id_i;
+            rvfi_inst[i][0].rvfi_stage_pc_wdata  <= pc_set_i & is_jump_id_i ? jump_target_id_i : pc_if_i;
 
-            rvfi_stage_mem_rmask[i][0] <= lsu_req_id_i & !lsu_we_id_i ? rvfi_mem_mask_int : 4'b0000;
-            rvfi_stage_mem_wmask[i][0] <= lsu_req_id_i & lsu_we_id_i ? rvfi_mem_mask_int : 4'b0000;
+            rvfi_inst[i][0].rvfi_stage_mem_rmask <= lsu_req_id_i & !lsu_we_id_i ? rvfi_mem_mask_int : 4'b0000;
+            rvfi_inst[i][0].rvfi_stage_mem_wmask <= lsu_req_id_i &  lsu_we_id_i ? rvfi_mem_mask_int : 4'b0000;
 
-            data_req_q[i]              <= lsu_req_id_i;
-            mret_q[i]                  <= mret_insn_id_i;
+            data_req_q[i]                        <= lsu_req_id_i;
+            mret_q[i]                            <= mret_insn_id_i;
 
           end
         end else if (i == 1) begin
           // Signals valid in EX stage
 
           //instructions retiring in the EX stage
-          if(instr_ex_done & !data_req_q[i-1] & !(rvfi_stage_trap[i-1][0] || mret_q[i-1])) begin
+          if(instr_ex_ready_i & !data_req_q[i-1] & !(rvfi_inst[i-1][0].rvfi_stage_trap || mret_q[i-1])) begin
 
-            rvfi_stage_valid[i][0]     <= ex_stage_ready_q;
+            rvfi_inst[i][0]                      <= rvfi_inst[i-1][0];
 
-            rvfi_stage_halt[i][0]      <= rvfi_stage_halt[i-1][0];
-            rvfi_stage_trap[i][0]      <= rvfi_stage_trap[i-1][0];
-            rvfi_stage_intr[i][0]      <= rvfi_stage_intr[i-1][0];
-            rvfi_stage_order[i][0]     <= rvfi_stage_order[i-1][0];
-            rvfi_stage_insn[i][0]      <= rvfi_stage_insn[i-1][0];
+            rvfi_inst[i][0].rvfi_stage_valid     <= ex_stage_ready_q;
 
-            rvfi_stage_rs1_addr[i][0]  <= rvfi_stage_rs1_addr[i-1][0];
-            rvfi_stage_rs2_addr[i][0]  <= rvfi_stage_rs2_addr[i-1][0];
-            rvfi_stage_rs3_addr[i][0]  <= rvfi_stage_rs3_addr[i-1][0];
-            rvfi_stage_rs1_rdata[i][0] <= rvfi_stage_rs1_rdata[i-1][0];
-            rvfi_stage_rs2_rdata[i][0] <= rvfi_stage_rs2_rdata[i-1][0];
-            rvfi_stage_rs3_rdata[i][0] <= rvfi_stage_rs3_rdata[i-1][0];
-            rvfi_stage_rd1_addr[i][0]  <= rvfi_stage_rd1_addr[i-1][0];
-            rvfi_stage_rd2_addr[i][0]  <= rvfi_stage_rd2_addr[i-1][0];
             // If writing to x0 zero write data as required by RVFI specification
-            rvfi_stage_rd1_wdata[i][0] <= rvfi_stage_rd1_addr[i-1][0] == '0 ? '0 : rvfi_rd1_wdata_d;
+            rvfi_inst[i][0].rvfi_stage_rd1_wdata <= rvfi_inst[i-1][0].rvfi_stage_rd1_addr == '0 ? '0 : rvfi_rd1_wdata_d;
+            rvfi_inst[i][0].rvfi_stage_pc_wdata  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_inst[i-1][0].rvfi_stage_pc_wdata;
 
-            rvfi_stage_pc_rdata[i][0]  <= rvfi_stage_pc_rdata[i-1][0];
-            rvfi_stage_pc_wdata[i][0]  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_stage_pc_wdata[i-1][0];
-
-            rvfi_stage_mem_rmask[i][0] <= rvfi_stage_mem_rmask[i-1][0];
-            rvfi_stage_mem_wmask[i][0] <= rvfi_stage_mem_wmask[i-1][0];
-            rvfi_stage_mem_addr[i][0]  <= rvfi_mem_addr_d;
-            rvfi_stage_mem_wdata[i][0] <= rvfi_mem_wdata_d;
+            rvfi_inst[i][0].rvfi_stage_mem_addr  <= rvfi_mem_addr_d;
+            rvfi_inst[i][0].rvfi_stage_mem_wdata <= rvfi_mem_wdata_d;
 
             if(data_req_q[i]) begin
-              if(instr_wb_done & rvfi_stage_valid[i][1] & !data_misagligned_q)
+              if(lsu_rvalid_wb_i & rvfi_inst[i][1].rvfi_stage_valid & !data_misagligned_q)
                 data_req_q[i] <= 1'b0;
             end
             mret_q[i]                  <= mret_q[i-1];
 
-          end else rvfi_stage_valid[i][0] <= 1'b0;
+          end else rvfi_inst[i][0].rvfi_stage_valid <= 1'b0;
 
           //instructions retiring in the WB stage
-          if(instr_ex_done & data_req_q[i-1]) begin
+          if(instr_ex_ready_i & data_req_q[i-1]) begin
             //true during first data req if GNT
             if(!lsu_misagligned_ex_i) begin
-              rvfi_stage_valid[i][1]     <= ex_stage_ready_q;
 
-              rvfi_stage_halt[i][1]      <= rvfi_stage_halt[i-1][0];
-              rvfi_stage_trap[i][1]      <= rvfi_stage_trap[i-1][0];
-              rvfi_stage_intr[i][1]      <= rvfi_stage_intr[i-1][0];
-              rvfi_stage_order[i][1]     <= rvfi_stage_order[i-1][0];
-              rvfi_stage_insn[i][1]      <= rvfi_stage_insn[i-1][0];
+              rvfi_inst[i][1]                      <= rvfi_inst[i-1][0];
+              rvfi_inst[i][1].rvfi_stage_valid     <= ex_stage_ready_q;
 
-              rvfi_stage_rs1_addr[i][1]  <= rvfi_stage_rs1_addr[i-1][0];
-              rvfi_stage_rs2_addr[i][1]  <= rvfi_stage_rs2_addr[i-1][0];
-              rvfi_stage_rs3_addr[i][1]  <= rvfi_stage_rs3_addr[i-1][0];
-              rvfi_stage_rs1_rdata[i][1] <= rvfi_stage_rs1_rdata[i-1][0];
-              rvfi_stage_rs2_rdata[i][1] <= rvfi_stage_rs2_rdata[i-1][0];
-              rvfi_stage_rs3_rdata[i][1] <= rvfi_stage_rs3_rdata[i-1][0];
-              rvfi_stage_rd1_addr[i][1]  <= rvfi_stage_rd1_addr[i-1][0];
-              rvfi_stage_rd2_addr[i][1]  <= rvfi_stage_rd2_addr[i-1][0];
               // If writing to x0 zero write data as required by RVFI specification
-              rvfi_stage_rd1_wdata[i][1] <= rvfi_stage_rd1_addr[i-1][0] == '0 ? '0 : rvfi_rd1_wdata_d;
+              rvfi_inst[i][1].rvfi_stage_rd1_wdata <= rvfi_inst[i-1][0].rvfi_stage_rd1_addr == '0 ? '0 : rvfi_rd1_wdata_d;
 
-              rvfi_stage_pc_rdata[i][1]  <= rvfi_stage_pc_rdata[i-1][0];
-              rvfi_stage_pc_wdata[i][1]  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_stage_pc_wdata[i-1][0];
-
-              rvfi_stage_mem_rmask[i][1] <= rvfi_stage_mem_rmask[i-1][0];
-              rvfi_stage_mem_wmask[i][1] <= rvfi_stage_mem_wmask[i-1][0];
-              rvfi_stage_mem_addr[i][1]  <= rvfi_mem_addr_d;
-              rvfi_stage_mem_wdata[i][1] <= rvfi_mem_wdata_d;
-              data_req_q[i]              <= data_req_q[i-1];
-              mret_q[i]                  <= mret_q[i-1];
+              rvfi_inst[i][1].rvfi_stage_pc_wdata  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_inst[i-1][0].rvfi_stage_pc_wdata;
+              rvfi_inst[i][1].rvfi_stage_mem_addr  <= rvfi_mem_addr_d;
+              rvfi_inst[i][1].rvfi_stage_mem_wdata <= rvfi_mem_wdata_d;
+              data_req_q[i]                        <= data_req_q[i-1];
+              mret_q[i]                            <= mret_q[i-1];
             end
           end
 
           //instructions retiring in the WB stage
-          if(instr_ex_valid_i & (rvfi_stage_trap[i-1][0] || mret_q[i-1])) begin
-              rvfi_stage_valid[i][1]     <= ex_stage_valid_q;
+          if(instr_ex_valid_i & (rvfi_inst[i-1][0].rvfi_stage_trap || mret_q[i-1])) begin
 
-              rvfi_stage_halt[i][1]      <= rvfi_stage_halt[i-1][0];
-              rvfi_stage_trap[i][1]      <= rvfi_stage_trap[i-1][0];
-              rvfi_stage_intr[i][1]      <= rvfi_stage_intr[i-1][0];
-              rvfi_stage_order[i][1]     <= rvfi_stage_order[i-1][0];
-              rvfi_stage_insn[i][1]      <= rvfi_stage_insn[i-1][0];
+              rvfi_inst[i][1]                      <= rvfi_inst[i-1][0];
+              rvfi_inst[i][1].rvfi_stage_valid     <= ex_stage_valid_q;
 
-              rvfi_stage_rs1_addr[i][1]  <= rvfi_stage_rs1_addr[i-1][0];
-              rvfi_stage_rs2_addr[i][1]  <= rvfi_stage_rs2_addr[i-1][0];
-              rvfi_stage_rs3_addr[i][1]  <= rvfi_stage_rs3_addr[i-1][0];
-              rvfi_stage_rs1_rdata[i][1] <= rvfi_stage_rs1_rdata[i-1][0];
-              rvfi_stage_rs2_rdata[i][1] <= rvfi_stage_rs2_rdata[i-1][0];
-              rvfi_stage_rs3_rdata[i][1] <= rvfi_stage_rs3_rdata[i-1][0];
-              rvfi_stage_rd1_addr[i][1]  <= rvfi_stage_rd1_addr[i-1][0];
-              rvfi_stage_rd2_addr[i][1]  <= rvfi_stage_rd2_addr[i-1][0];
               // If writing to x0 zero write data as required by RVFI specification
-              rvfi_stage_rd1_wdata[i][1] <= rvfi_stage_rd1_addr[i-1][0] == '0 ? '0 : rvfi_rd1_wdata_d;
+              rvfi_inst[i][1].rvfi_stage_rd1_wdata <= rvfi_inst[i-1][0].rvfi_stage_rd1_addr == '0 ? '0 : rvfi_rd1_wdata_d;
 
-              rvfi_stage_pc_rdata[i][1]  <= rvfi_stage_pc_rdata[i-1][0];
-              rvfi_stage_pc_wdata[i][1]  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_stage_pc_wdata[i-1][0];
+              rvfi_inst[i][1].rvfi_stage_pc_wdata  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_inst[i-1][0].rvfi_stage_pc_wdata;
 
-              rvfi_stage_mem_rmask[i][1] <= rvfi_stage_mem_rmask[i-1][0];
-              rvfi_stage_mem_wmask[i][1] <= rvfi_stage_mem_wmask[i-1][0];
-              rvfi_stage_mem_addr[i][1]  <= rvfi_mem_addr_d;
-              rvfi_stage_mem_wdata[i][1] <= rvfi_mem_wdata_d;
-              data_req_q[i]              <= 1'b0;
-              mret_q[i]                  <= mret_q[i-1];
+              rvfi_inst[i][1].rvfi_stage_mem_addr  <= rvfi_mem_addr_d;
+              rvfi_inst[i][1].rvfi_stage_mem_wdata <= rvfi_mem_wdata_d;
+              data_req_q[i]                        <= 1'b0;
+              mret_q[i]                            <= mret_q[i-1];
           end
 
         end else if (i == 2) begin
@@ -587,101 +467,30 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
 
           case(1'b1)
 
-            instr_wb_done & data_req_q[i-1]: begin
+            lsu_rvalid_wb_i & data_req_q[i-1]: begin
 
-              rvfi_stage_valid[i][1]     <= rvfi_stage_valid[i-1][1] & !data_misagligned_q;
-              rvfi_stage_halt[i][1]      <= rvfi_stage_halt[i-1][1];
-              rvfi_stage_trap[i][1]      <= rvfi_stage_trap[i-1][1];
-              rvfi_stage_intr[i][1]      <= rvfi_stage_intr[i-1][1];
-              rvfi_stage_order[i][1]     <= rvfi_stage_order[i-1][1];
-              rvfi_stage_insn[i][1]      <= rvfi_stage_insn[i-1][1];
+              rvfi_inst[i][1]            <= rvfi_inst[i-1][1];
 
-              rvfi_stage_rs1_addr[i][1]  <= rvfi_stage_rs1_addr[i-1][1];
-              rvfi_stage_rs2_addr[i][1]  <= rvfi_stage_rs2_addr[i-1][1];
-              rvfi_stage_rs3_addr[i][1]  <= rvfi_stage_rs3_addr[i-1][1];
-              rvfi_stage_rs1_rdata[i][1] <= rvfi_stage_rs1_rdata[i-1][1];
-              rvfi_stage_rs2_rdata[i][1] <= rvfi_stage_rs2_rdata[i-1][1];
-              rvfi_stage_rs3_rdata[i][1] <= rvfi_stage_rs3_rdata[i-1][1];
-              rvfi_stage_rd1_addr[i][1]  <= rvfi_stage_rd1_addr[i-1][1];
-              rvfi_stage_rd2_addr[i][1]  <= rvfi_stage_rd2_addr[i-1][1];
-              rvfi_stage_rd1_wdata[i][1] <= rvfi_stage_rd1_wdata[i-1][1];
-              // If writing to x0 zero write data as required by RVFI specification
-              rvfi_stage_rd2_wdata[i][1] <= rvfi_stage_rd2_wdata[i-1][1];
-
-              rvfi_stage_pc_rdata[i][1]  <= rvfi_stage_pc_rdata[i-1][1];
-              rvfi_stage_pc_wdata[i][1]  <= rvfi_stage_pc_wdata[i-1][1];
-
-              rvfi_stage_mem_rmask[i][1] <= rvfi_stage_mem_rmask[i-1][1];
-              rvfi_stage_mem_wmask[i][1] <= rvfi_stage_mem_wmask[i-1][1];
-              rvfi_stage_mem_addr[i][1]  <= rvfi_stage_mem_addr[i-1][1];
-              rvfi_stage_mem_wdata[i][1] <= rvfi_stage_mem_wdata[i-1][1];
-              rvfi_stage_mem_rdata[i][1] <= rvfi_rd2_wdata_d;
+              rvfi_inst[i][1].rvfi_stage_valid  <= rvfi_inst[i-1][1].rvfi_stage_valid & !data_misagligned_q;
+              rvfi_inst[i][1].rvfi_stage_mem_rdata <= rvfi_rd2_wdata_d;
 
 
-            end //instr_wb_done
-            rvfi_stage_trap[i-1][1]: begin
+            end //lsu_rvalid_wb_i
+            rvfi_inst[i-1][1].rvfi_stage_trap: begin
 
-              rvfi_stage_valid[i][1]     <= rvfi_stage_valid[i-1][1];
-              rvfi_stage_halt[i][1]      <= rvfi_stage_halt[i-1][1];
-              rvfi_stage_trap[i][1]      <= rvfi_stage_trap[i-1][1];
-              rvfi_stage_intr[i][1]      <= rvfi_stage_intr[i-1][1];
-              rvfi_stage_order[i][1]     <= rvfi_stage_order[i-1][1];
-              rvfi_stage_insn[i][1]      <= rvfi_stage_insn[i-1][1];
+              rvfi_inst[i][1]            <= rvfi_inst[i-1][1];
 
-              rvfi_stage_rs1_addr[i][1]  <= rvfi_stage_rs1_addr[i-1][1];
-              rvfi_stage_rs2_addr[i][1]  <= rvfi_stage_rs2_addr[i-1][1];
-              rvfi_stage_rs3_addr[i][1]  <= rvfi_stage_rs3_addr[i-1][1];
-              rvfi_stage_rs1_rdata[i][1] <= rvfi_stage_rs1_rdata[i-1][1];
-              rvfi_stage_rs2_rdata[i][1] <= rvfi_stage_rs2_rdata[i-1][1];
-              rvfi_stage_rs3_rdata[i][1] <= rvfi_stage_rs3_rdata[i-1][1];
-              rvfi_stage_rd1_addr[i][1]  <= rvfi_stage_rd1_addr[i-1][1];
-              rvfi_stage_rd2_addr[i][1]  <= rvfi_stage_rd2_addr[i-1][1];
-              rvfi_stage_rd1_wdata[i][1] <= rvfi_stage_rd1_wdata[i-1][1];
-              // If writing to x0 zero write data as required by RVFI specification
-              rvfi_stage_rd2_wdata[i][1] <= rvfi_stage_rd2_wdata[i-1][1];
-
-              rvfi_stage_pc_rdata[i][1]  <= rvfi_stage_pc_rdata[i-1][1];
-              rvfi_stage_pc_wdata[i][1]  <= rvfi_stage_pc_wdata[i-1][1];
-
-              rvfi_stage_mem_rmask[i][1] <= rvfi_stage_mem_rmask[i-1][1];
-              rvfi_stage_mem_wmask[i][1] <= rvfi_stage_mem_wmask[i-1][1];
-              rvfi_stage_mem_addr[i][1]  <= rvfi_stage_mem_addr[i-1][1];
-              rvfi_stage_mem_wdata[i][1] <= rvfi_stage_mem_wdata[i-1][1];
-              rvfi_stage_mem_rdata[i][1] <= rvfi_stage_mem_rdata[i-1][1];
-            end //instr_wb_done
-            (mret_q[i-1] & rvfi_stage_valid[i-1][1] )|| mret_q[i]: begin
+            end //lsu_rvalid_wb_i
+            (mret_q[i-1] & rvfi_inst[i-1][1].rvfi_stage_valid )|| mret_q[i]: begin
               //the MRET retires in one extra cycle, thus
-              rvfi_stage_valid[i][1]     <= mret_q[i];
-              rvfi_stage_halt[i][1]      <= rvfi_stage_halt[i-1][1];
-              rvfi_stage_trap[i][1]      <= rvfi_stage_trap[i-1][1];
-              rvfi_stage_intr[i][1]      <= rvfi_stage_intr[i-1][1];
-              rvfi_stage_order[i][1]     <= rvfi_stage_order[i-1][1];
-              rvfi_stage_insn[i][1]      <= rvfi_stage_insn[i-1][1];
+              rvfi_inst[i][1]            <= rvfi_inst[i-1][1];
+              rvfi_inst[i][1].rvfi_stage_valid    <= mret_q[i];
+              rvfi_inst[i][1].rvfi_stage_pc_wdata <= is_mret_wb_i ? mepc_target_wb_i : exception_target_wb_i;
 
-              rvfi_stage_rs1_addr[i][1]  <= rvfi_stage_rs1_addr[i-1][1];
-              rvfi_stage_rs2_addr[i][1]  <= rvfi_stage_rs2_addr[i-1][1];
-              rvfi_stage_rs3_addr[i][1]  <= rvfi_stage_rs3_addr[i-1][1];
-              rvfi_stage_rs1_rdata[i][1] <= rvfi_stage_rs1_rdata[i-1][1];
-              rvfi_stage_rs2_rdata[i][1] <= rvfi_stage_rs2_rdata[i-1][1];
-              rvfi_stage_rs3_rdata[i][1] <= rvfi_stage_rs3_rdata[i-1][1];
-              rvfi_stage_rd1_addr[i][1]  <= rvfi_stage_rd1_addr[i-1][1];
-              rvfi_stage_rd2_addr[i][1]  <= rvfi_stage_rd2_addr[i-1][1];
-              rvfi_stage_rd1_wdata[i][1] <= rvfi_stage_rd1_wdata[i-1][1];
-              // If writing to x0 zero write data as required by RVFI specification
-              rvfi_stage_rd2_wdata[i][1] <= rvfi_stage_rd2_wdata[i-1][1];
-
-              rvfi_stage_pc_rdata[i][1]  <= rvfi_stage_pc_rdata[i-1][1];
-              rvfi_stage_pc_wdata[i][1]  <= is_mret_wb_i ? mepc_target_wb_i : exception_target_wb_i;
-
-              rvfi_stage_mem_rmask[i][1] <= rvfi_stage_mem_rmask[i-1][1];
-              rvfi_stage_mem_wmask[i][1] <= rvfi_stage_mem_wmask[i-1][1];
-              rvfi_stage_mem_addr[i][1]  <= rvfi_stage_mem_addr[i-1][1];
-              rvfi_stage_mem_wdata[i][1] <= rvfi_stage_mem_wdata[i-1][1];
-              rvfi_stage_mem_rdata[i][1] <= rvfi_stage_mem_rdata[i-1][1];
               mret_q[i]                  <= !mret_q[i];
-            end //instr_wb_done
+            end //lsu_rvalid_wb_i
             default:
-              rvfi_stage_valid[i][1]     <= 1'b0;
+              rvfi_inst[i][1].rvfi_stage_valid   <= 1'b0;
             endcase
         end //i == 2
 

@@ -215,6 +215,8 @@ module cv32e40p_wrapper import cv32e40p_apu_core_pkg::*;
     .illegal_insn_id_i        ( core_i.id_stage_i.controller_i.illegal_insn_n  ),
     .instr_is_compressed_id_i ( core_i.if_stage_i.is_compressed_id_o           ),
     .mret_insn_id_i           ( core_i.id_stage_i.controller_i.mret_insn_i     ),
+    .ebrk_insn_id_i           ( core_i.id_stage_i.controller_i.ebrk_insn_i     ),
+    .ecall_insn_id_i          ( core_i.id_stage_i.controller_i.ecall_insn_i    ),
 
     .instr_rdata_c_id_i       ( core_i.if_stage_i.instr_rdata_c_id             ),
     .instr_rdata_id_i         ( core_i.if_stage_i.instr_rdata_id_o             ),

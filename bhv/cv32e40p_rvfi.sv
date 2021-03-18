@@ -27,6 +27,8 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   input  logic        irq_ack_i,
   input  logic        illegal_insn_id_i,
   input  logic        mret_insn_id_i,
+  input  logic        ebrk_insn_id_i,
+  input  logic        ecall_insn_id_i,
 
   input  logic        instr_is_compressed_id_i,
   input  logic [15:0] instr_rdata_c_id_i,
@@ -151,6 +153,7 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
 
   logic  [RVFI_STAGES-1:0] data_req_q;
   logic  [RVFI_STAGES-1:0] mret_q;
+  logic  [RVFI_STAGES-1:0] syscall_q;
 
   logic         data_misagligned_q;
   logic         intr1_d;
@@ -257,8 +260,8 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
         if(rvfi_valid[0])
           {instr_0_q.valid, instr_0_q.order, instr_0_q.pc_wdata} <= {rvfi_valid[0], rvfi_order[63:0], rvfi_pc_wdata[31:0]};
 
-      end //1
-    end //always_ff
+      end
+    end
 
 
     always_comb begin
@@ -291,7 +294,6 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
 
           is_next_instr  = rvfi_order[2*64-1:64] - prev_instr.order == 1;
 
-
           if(!instr_1_q.valid & !instr_1_q.valid) begin
             intr1_d  = 1'b0;
             intr0_d  = 1'b0;
@@ -317,8 +319,9 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
         rvfi_stage[i][0]            <= rvfi_instr_t'(0);
         rvfi_stage[i][1]            <= rvfi_instr_t'(0);
 
-        data_req_q[i]              <= '0;
-        mret_q[i]                  <= '0;
+        data_req_q[i]               <= '0;
+        mret_q[i]                   <= '0;
+        syscall_q[i]                <= '0;
 
       end else begin
 
@@ -351,17 +354,18 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
             rvfi_stage[i][0].rvfi_mem_rmask <= lsu_req_id_i & !lsu_we_id_i ? rvfi_mem_mask_int : 4'b0000;
             rvfi_stage[i][0].rvfi_mem_wmask <= lsu_req_id_i &  lsu_we_id_i ? rvfi_mem_mask_int : 4'b0000;
 
-            data_req_q[i]                        <= lsu_req_id_i;
-            mret_q[i]                            <= mret_insn_id_i;
+            data_req_q[i]                   <= lsu_req_id_i;
+            mret_q[i]                       <= mret_insn_id_i;
+            syscall_q[i]                    <= ebrk_insn_id_i | ecall_insn_id_i;
 
           end
         end else if (i == 1) begin
-          // Signals valid in EX stage
+        // Signals valid in EX stage
 
           //instructions retiring in the EX stage
-          if(instr_ex_ready_i & !data_req_q[i-1] & !(rvfi_stage[i-1][0].rvfi_trap || mret_q[i-1])) begin
+          if(instr_ex_ready_i & !data_req_q[i-1] & !(rvfi_stage[i-1][0].rvfi_trap | mret_q[i-1] | syscall_q[i-1])) begin
 
-            rvfi_stage[i][0]                      <= rvfi_stage[i-1][0];
+            rvfi_stage[i][0]                <= rvfi_stage[i-1][0];
 
             rvfi_stage[i][0].rvfi_valid     <= ex_stage_ready_q;
 
@@ -369,86 +373,86 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
             rvfi_stage[i][0].rvfi_rd1_wdata <= rvfi_stage[i-1][0].rvfi_rd1_addr == '0 ? '0 : rvfi_rd1_wdata_d;
             rvfi_stage[i][0].rvfi_pc_wdata  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_stage[i-1][0].rvfi_pc_wdata;
 
-            rvfi_stage[i][0].rvfi_mem_addr  <= rvfi_mem_addr_d;
-            rvfi_stage[i][0].rvfi_mem_wdata <= rvfi_mem_wdata_d;
-
+            //clean up data_req_q[1] when the previous ld/st retired
             if(data_req_q[i]) begin
               if(lsu_rvalid_wb_i & rvfi_stage[i][1].rvfi_valid & !data_misagligned_q)
                 data_req_q[i] <= 1'b0;
             end
             mret_q[i]                  <= mret_q[i-1];
+            syscall_q[i]               <= syscall_q[i-1];
 
           end else rvfi_stage[i][0].rvfi_valid <= 1'b0;
 
           //instructions retiring in the WB stage
+
+          //memory operations
           if(instr_ex_ready_i & data_req_q[i-1]) begin
             //true during first data req if GNT
             if(!lsu_misagligned_ex_i) begin
 
-              rvfi_stage[i][1]                      <= rvfi_stage[i-1][0];
+              rvfi_stage[i][1]                <= rvfi_stage[i-1][0];
               rvfi_stage[i][1].rvfi_valid     <= ex_stage_ready_q;
 
               // If writing to x0 zero write data as required by RVFI specification
               rvfi_stage[i][1].rvfi_rd1_wdata <= rvfi_stage[i-1][0].rvfi_rd1_addr == '0 ? '0 : rvfi_rd1_wdata_d;
 
-              rvfi_stage[i][1].rvfi_pc_wdata  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_stage[i-1][0].rvfi_pc_wdata;
               rvfi_stage[i][1].rvfi_mem_addr  <= rvfi_mem_addr_d;
               rvfi_stage[i][1].rvfi_mem_wdata <= rvfi_mem_wdata_d;
-              data_req_q[i]                        <= data_req_q[i-1];
-              mret_q[i]                            <= mret_q[i-1];
+              data_req_q[i]                   <= data_req_q[i-1];
+              mret_q[i]                       <= mret_q[i-1];
+              syscall_q[i]                    <= syscall_q[i-1];
             end
           end
 
-          //instructions retiring in the WB stage
-          if(instr_ex_valid_i & (rvfi_stage[i-1][0].rvfi_trap || mret_q[i-1])) begin
+          //exceptions
+          if(instr_ex_valid_i & (rvfi_stage[i-1][0].rvfi_trap | mret_q[i-1] | syscall_q[i-1])) begin
 
-              rvfi_stage[i][1]                      <= rvfi_stage[i-1][0];
+              rvfi_stage[i][1]                <= rvfi_stage[i-1][0];
               rvfi_stage[i][1].rvfi_valid     <= ex_stage_valid_q;
 
               // If writing to x0 zero write data as required by RVFI specification
               rvfi_stage[i][1].rvfi_rd1_wdata <= rvfi_stage[i-1][0].rvfi_rd1_addr == '0 ? '0 : rvfi_rd1_wdata_d;
 
-              rvfi_stage[i][1].rvfi_pc_wdata  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_stage[i-1][0].rvfi_pc_wdata;
-
               rvfi_stage[i][1].rvfi_mem_addr  <= rvfi_mem_addr_d;
               rvfi_stage[i][1].rvfi_mem_wdata <= rvfi_mem_wdata_d;
-              data_req_q[i]                        <= 1'b0;
-              mret_q[i]                            <= mret_q[i-1];
+              data_req_q[i]                   <= 1'b0;
+              mret_q[i]                       <= mret_q[i-1];
+              syscall_q[i]                    <= syscall_q[i-1];
           end
 
         end else if (i == 2) begin
-          // Signals valid in WB stage
+        // Signals valid in WB stage
 
           case(1'b1)
 
+            //memory operations
             lsu_rvalid_wb_i & data_req_q[i-1]: begin
-
-              rvfi_stage[i][1]            <= rvfi_stage[i-1][1];
-
-              rvfi_stage[i][1].rvfi_valid  <= rvfi_stage[i-1][1].rvfi_valid & !data_misagligned_q;
+              rvfi_stage[i][1]                <= rvfi_stage[i-1][1];
+              //misaligneds take 2 cycles at least
+              rvfi_stage[i][1].rvfi_valid     <= rvfi_stage[i-1][1].rvfi_valid & !data_misagligned_q;
               rvfi_stage[i][1].rvfi_mem_rdata <= rvfi_rd2_wdata_d;
-
-
-            end //lsu_rvalid_wb_i
+            end
+            //traps
             rvfi_stage[i-1][1].rvfi_trap: begin
-
-              rvfi_stage[i][1]            <= rvfi_stage[i-1][1];
-
-            end //lsu_rvalid_wb_i
+              rvfi_stage[i][1]                <= rvfi_stage[i-1][1];
+            end
+            //ebreaks, ecall, fence.i
+            syscall_q[i-1]: begin
+              rvfi_stage[i][1]                <= rvfi_stage[i-1][1];
+              rvfi_stage[i][1].rvfi_pc_wdata  <= exception_target_wb_i;
+            end
+            //mret
             (mret_q[i-1] & rvfi_stage[i-1][1].rvfi_valid )|| mret_q[i]: begin
               //the MRET retires in one extra cycle, thus
-              rvfi_stage[i][1]            <= rvfi_stage[i-1][1];
-              rvfi_stage[i][1].rvfi_valid    <= mret_q[i];
-              rvfi_stage[i][1].rvfi_pc_wdata <= is_mret_wb_i ? mepc_target_wb_i : exception_target_wb_i;
-
-              mret_q[i]                  <= !mret_q[i];
-            end //lsu_rvalid_wb_i
+              rvfi_stage[i][1]                <= rvfi_stage[i-1][1];
+              rvfi_stage[i][1].rvfi_valid     <= mret_q[i];
+              rvfi_stage[i][1].rvfi_pc_wdata  <= is_mret_wb_i ? mepc_target_wb_i : exception_target_wb_i;
+              mret_q[i]                       <= !mret_q[i];
+            end
             default:
-              rvfi_stage[i][1].rvfi_valid   <= 1'b0;
+              rvfi_stage[i][1].rvfi_valid     <= 1'b0;
             endcase
-        end //i == 2
-
-
+        end
       end
     end
   end

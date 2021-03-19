@@ -733,4 +733,19 @@ parameter C_RM                = 3;
 
 localparam RVFI_NRET          = 2;
 
+typedef struct packed {
+  logic uie;
+  // logic sie;      - unimplemented, hardwired to '0
+  // logic hie;      - unimplemented, hardwired to '0
+  logic mie;
+  logic upie;
+  // logic spie;     - unimplemented, hardwired to '0
+  // logic hpie;     - unimplemented, hardwired to '0
+  logic mpie;
+  // logic spp;      - unimplemented, hardwired to '0
+  // logic[1:0] hpp; - unimplemented, hardwired to '0
+  PrivLvl_t mpp;
+  logic mprv;
+} Status_t;
+
 endpackage

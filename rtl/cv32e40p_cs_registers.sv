@@ -183,21 +183,6 @@ module cv32e40p_cs_registers import cv32e40p_pkg::*;
   // but only HPMCOUNTERs (depending on NUM_MHPMCOUNTERS)
   localparam PULP_PERF_COUNTERS = 0;
 
-  typedef struct packed {
-    logic uie;
-    // logic sie;      - unimplemented, hardwired to '0
-    // logic hie;      - unimplemented, hardwired to '0
-    logic mie;
-    logic upie;
-    // logic spie;     - unimplemented, hardwired to '0
-    // logic hpie;     - unimplemented, hardwired to '0
-    logic mpie;
-    // logic spp;      - unimplemented, hardwired to '0
-    // logic[1:0] hpp; - unimplemented, hardwired to '0
-    PrivLvl_t mpp;
-    logic mprv;
-  } Status_t;
-
   typedef struct packed{
       logic [31:28] xdebugver;
       logic [27:16] zero2;

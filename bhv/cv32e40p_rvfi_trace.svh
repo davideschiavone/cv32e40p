@@ -41,6 +41,10 @@
     logic [ 3:0] rvfi_mem_wmask ;
     logic [31:0] rvfi_mem_rdata ;
     logic [31:0] rvfi_mem_wdata ;
+    logic [31:0] rvfi_csr_mstatus_rmask;
+    logic [31:0] rvfi_csr_mstatus_wmask;
+    logic [31:0] rvfi_csr_mstatus_rdata;
+    logic [31:0] rvfi_csr_mstatus_wdata;
   } rvfi_instr_t;
 
   typedef struct packed {

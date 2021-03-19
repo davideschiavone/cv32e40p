@@ -269,7 +269,10 @@ module cv32e40p_wrapper import cv32e40p_apu_core_pkg::*;
     .mepc_target_wb_i         ( core_i.if_stage_i.mepc_i                       ),
     .is_mret_wb_i             ( core_i.if_stage_i.pc_mux_i == PC_MRET          ),
 
-    .is_debug_mode            ( core_i.id_stage_i.controller_i.debug_mode_q    )
+    .is_debug_mode            ( core_i.id_stage_i.controller_i.debug_mode_q    ),
+
+    .csr_mstatus_n_i          ( core_i.cs_registers_i.mstatus_n                ),
+    .csr_mstatus_q_i          ( core_i.cs_registers_i.mstatus_q                )
 
   );
 `endif

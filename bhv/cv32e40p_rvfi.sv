@@ -87,6 +87,10 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
 
   input  logic        is_debug_mode,
 
+  //CSRs
+  input Status_t      csr_mstatus_n_i,
+  input Status_t      csr_mstatus_q_i,
+
   // RISC-V Formal Interface
   // Does not comply with the coding standards of _i/_o suffixes, but follows
   // the convention of RISC-V Formal Interface Specification.
@@ -115,13 +119,14 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   output logic [RVFI_NRET*32/8-1:0]rvfi_mem_rmask,
   output logic [RVFI_NRET*32/8-1:0]rvfi_mem_wmask,
   output logic [RVFI_NRET*32-1:0]  rvfi_mem_rdata,
-  output logic [RVFI_NRET*32-1:0]  rvfi_mem_wdata
+  output logic [RVFI_NRET*32-1:0]  rvfi_mem_wdata,
+
+  output logic [RVFI_NRET*32-1:0]  rvfi_csr_mstatus_rmask,
+  output logic [RVFI_NRET*32-1:0]  rvfi_csr_mstatus_wmask,
+  output logic [RVFI_NRET*32-1:0]  rvfi_csr_mstatus_rdata,
+  output logic [RVFI_NRET*32-1:0]  rvfi_csr_mstatus_wdata
 );
 
-  logic        rvfi_instr_new_wb;
-  logic        rvfi_intr_q;
-  logic        rvfi_set_trap_pc_d;
-  logic        rvfi_set_trap_pc_q;
   logic [31:0] rvfi_insn_id;
   logic [4:0]  rvfi_rs1_addr_d;
   logic [4:0]  rvfi_rs2_addr_d;
@@ -197,6 +202,10 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   assign rvfi_mem_wmask [3:0]       = rvfi_stage[RVFI_STAGES-2][0].rvfi_mem_wmask ;
   assign rvfi_mem_rdata [31:0]      = rvfi_stage[RVFI_STAGES-2][0].rvfi_mem_rdata ;
   assign rvfi_mem_wdata [31:0]      = rvfi_stage[RVFI_STAGES-2][0].rvfi_mem_wdata ;
+  assign rvfi_csr_mstatus_rmask[31:0] = rvfi_stage[RVFI_STAGES-2][0].rvfi_csr_mstatus_rmask;
+  assign rvfi_csr_mstatus_wmask[31:0] = rvfi_stage[RVFI_STAGES-2][0].rvfi_csr_mstatus_wmask;
+  assign rvfi_csr_mstatus_rdata[31:0] = rvfi_stage[RVFI_STAGES-2][0].rvfi_csr_mstatus_rdata;
+  assign rvfi_csr_mstatus_wdata[31:0] = rvfi_stage[RVFI_STAGES-2][0].rvfi_csr_mstatus_wdata;
 
   //instructions retiring in the WB stage
   assign rvfi_valid     [1]         = rvfi_stage[RVFI_STAGES-1][1].rvfi_valid     ;
@@ -224,6 +233,10 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
   assign rvfi_mem_wmask [7:4]       = rvfi_stage[RVFI_STAGES-1][1].rvfi_mem_wmask ;
   assign rvfi_mem_rdata [2*32-1:32] = rvfi_stage[RVFI_STAGES-1][1].rvfi_mem_rdata ;
   assign rvfi_mem_wdata [2*32-1:32] = rvfi_stage[RVFI_STAGES-1][1].rvfi_mem_wdata ;
+  assign rvfi_csr_mstatus_rmask[2*32-1:32] = rvfi_stage[RVFI_STAGES-1][1].rvfi_csr_mstatus_rmask;
+  assign rvfi_csr_mstatus_wmask[2*32-1:32] = rvfi_stage[RVFI_STAGES-1][1].rvfi_csr_mstatus_wmask;
+  assign rvfi_csr_mstatus_rdata[2*32-1:32] = rvfi_stage[RVFI_STAGES-1][1].rvfi_csr_mstatus_rdata;
+  assign rvfi_csr_mstatus_wdata[2*32-1:32] = rvfi_stage[RVFI_STAGES-1][1].rvfi_csr_mstatus_wdata;
 
   // An instruction in the ID stage is valid (instr_id_valid_i)
   // when it's not stalled by the EX stage
@@ -319,6 +332,9 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
         rvfi_stage[i][0]            <= rvfi_instr_t'(0);
         rvfi_stage[i][1]            <= rvfi_instr_t'(0);
 
+        rvfi_stage[i][0].rvfi_csr_mstatus_rmask <= 32'hFFFF_FFFF;
+        rvfi_stage[i][0].rvfi_csr_mstatus_wmask <= 32'hFFFF_FFFF;
+
         data_req_q[i]               <= '0;
         mret_q[i]                   <= '0;
         syscall_q[i]                <= '0;
@@ -373,6 +389,10 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
             rvfi_stage[i][0].rvfi_rd1_wdata <= rvfi_stage[i-1][0].rvfi_rd1_addr == '0 ? '0 : rvfi_rd1_wdata_d;
             rvfi_stage[i][0].rvfi_pc_wdata  <= pc_set_i & is_branch_ex_i ? branch_target_ex_i : rvfi_stage[i-1][0].rvfi_pc_wdata;
 
+            //csr operations as READ, WRITE, SET, CLEAR (does not work yet with interrupts)
+            rvfi_stage[i][0].rvfi_csr_mstatus_wdata <= {14'b0,csr_mstatus_n_i.mprv,4'b0,csr_mstatus_n_i.mpp,3'b0,csr_mstatus_n_i.mpie,2'h0,csr_mstatus_n_i.upie,csr_mstatus_n_i.mie,2'h0,csr_mstatus_n_i.uie};
+            rvfi_stage[i][0].rvfi_csr_mstatus_rdata <= {14'b0,csr_mstatus_q_i.mprv,4'b0,csr_mstatus_q_i.mpp,3'b0,csr_mstatus_q_i.mpie,2'h0,csr_mstatus_q_i.upie,csr_mstatus_q_i.mie,2'h0,csr_mstatus_q_i.uie};
+
             //clean up data_req_q[1] when the previous ld/st retired
             if(data_req_q[i]) begin
               if(lsu_rvalid_wb_i & rvfi_stage[i][1].rvfi_valid & !data_misagligned_q)
@@ -415,6 +435,11 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
 
               rvfi_stage[i][1].rvfi_mem_addr  <= rvfi_mem_addr_d;
               rvfi_stage[i][1].rvfi_mem_wdata <= rvfi_mem_wdata_d;
+
+              //exceptions as illegal, and syscalls
+              rvfi_stage[i][1].rvfi_csr_mstatus_wdata <= {14'b0,csr_mstatus_n_i.mprv,4'b0,csr_mstatus_n_i.mpp,3'b0,csr_mstatus_n_i.mpie,2'h0,csr_mstatus_n_i.upie,csr_mstatus_n_i.mie,2'h0,csr_mstatus_n_i.uie};
+              rvfi_stage[i][1].rvfi_csr_mstatus_rdata <= {14'b0,csr_mstatus_q_i.mprv,4'b0,csr_mstatus_q_i.mpp,3'b0,csr_mstatus_q_i.mpie,2'h0,csr_mstatus_q_i.upie,csr_mstatus_q_i.mie,2'h0,csr_mstatus_q_i.uie};
+
               data_req_q[i]                   <= 1'b0;
               mret_q[i]                       <= mret_q[i-1];
               syscall_q[i]                    <= syscall_q[i-1];
@@ -447,6 +472,12 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
               rvfi_stage[i][1]                <= rvfi_stage[i-1][1];
               rvfi_stage[i][1].rvfi_valid     <= mret_q[i];
               rvfi_stage[i][1].rvfi_pc_wdata  <= is_mret_wb_i ? mepc_target_wb_i : exception_target_wb_i;
+              if(!mret_q[i]) begin
+                //first cyle of MRET (FLUSH_WB)
+                rvfi_stage[i][1].rvfi_csr_mstatus_wdata <= {14'b0,csr_mstatus_n_i.mprv,4'b0,csr_mstatus_n_i.mpp,3'b0,csr_mstatus_n_i.mpie,2'h0,csr_mstatus_n_i.upie,csr_mstatus_n_i.mie,2'h0,csr_mstatus_n_i.uie};
+                rvfi_stage[i][1].rvfi_csr_mstatus_rdata <= {14'b0,csr_mstatus_q_i.mprv,4'b0,csr_mstatus_q_i.mpp,3'b0,csr_mstatus_q_i.mpie,2'h0,csr_mstatus_q_i.upie,csr_mstatus_q_i.mie,2'h0,csr_mstatus_q_i.uie};
+              end
+
               mret_q[i]                       <= !mret_q[i];
             end
             default:

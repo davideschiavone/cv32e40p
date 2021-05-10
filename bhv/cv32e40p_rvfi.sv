@@ -456,6 +456,7 @@ module cv32e40p_rvfi import cv32e40p_pkg::*;
               //misaligneds take 2 cycles at least
               rvfi_stage[i][1].rvfi_valid     <= rvfi_stage[i-1][1].rvfi_valid & !data_misagligned_q;
               rvfi_stage[i][1].rvfi_mem_rdata <= rvfi_rd2_wdata_d;
+              rvfi_stage[i][1].rvfi_rd2_wdata <= rvfi_stage[i-1][1].rvfi_rd2_addr == '0 ? '0 : rvfi_rd2_wdata_d;
             end
             //traps
             rvfi_stage[i-1][1].rvfi_trap: begin
